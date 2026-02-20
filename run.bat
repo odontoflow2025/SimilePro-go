@@ -1,0 +1,3 @@
+@echo off
+echo Starting OdontoFlow API...
+go run cmd/api/main.go
