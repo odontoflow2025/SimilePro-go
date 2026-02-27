@@ -27,7 +27,15 @@ func Connect(cfg *config.Config) (*gorm.DB, error) {
     log.Println("Database connected successfully")
 
     // Auto-migrate models
-    if err := db.AutoMigrate(&models.User{}, &models.Clinica{}, &models.Dentista{}, &models.Paciente{}, &models.Funcionario{}, &models.Procedimento{}, &models.Agendamento{}, &models.PlanoTratamento{}, &models.ItemPlano{}, &models.Evolucao{}, &models.Anamnese{}, &models.Convenio{}, &models.Transacao{}, &models.Fatura{}, &models.AuditLog{}, &models.CentroCusto{}, &models.PlanoConta{}, &models.ConfiguracaoSistema{}, &models.Alerta{}, &models.AcessoProntuario{}); err != nil {
+    if err := db.AutoMigrate(
+        &models.User{}, &models.Clinica{}, &models.Dentista{}, &models.Paciente{}, 
+        &models.Funcionario{}, &models.Procedimento{}, &models.Agendamento{}, 
+        &models.PlanoTratamento{}, &models.ItemPlano{}, &models.Evolucao{}, 
+        &models.Anamnese{}, &models.Convenio{}, &models.Transacao{}, &models.Fatura{}, 
+        &models.AuditLog{}, &models.CentroCusto{}, &models.PlanoConta{}, 
+        &models.ConfiguracaoSistema{}, &models.Alerta{}, &models.AcessoProntuario{},
+        &models.Produto{}, &models.NotaFiscalEntrada{}, &models.ItemNF{}, &models.MovimentacaoEstoque{},
+    ); err != nil {
         log.Println("Warning: Auto-migration encountered an error (continuing):", err)
     }
 

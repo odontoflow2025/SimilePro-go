@@ -170,18 +170,29 @@ func (h *TransacaoHandler) UpdateStatus(c *gin.Context) {
 // @Success      200        {object}  map[string]float64
 // @Router       /financeiro/sumario [get]
 func (h *TransacaoHandler) GetSummary(c *gin.Context) {
+	clinicaIDRaw, _ := c.Get("clinicaID")
+	var clinicaID uint
+	
+	switch v := clinicaIDRaw.(type) {
+	case uint:
+		clinicaID = v
+	case float64:
+		clinicaID = uint(v)
+	default:
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "ID da clínica inválido ou ausente no contexto"})
+		return
+	}
+
 	dataInicio := c.Query("dataInicio")
 	dataFim := c.Query("dataFim")
 
-	// Helper to build filtering query
 	buildQuery := func(tipo models.TipoTransacao) *gorm.DB {
-		q := h.DB.Model(&models.Transacao{}).Where("tipo = ? AND status != ?", tipo, models.StatusTransacaoCancelado)
+		q := h.DB.Model(&models.Transacao{}).Where("clinica_id = ? AND tipo = ? AND status != ?", clinicaID, tipo, models.StatusTransacaoCancelado)
 		if dataInicio != "" {
 			q = q.Where("data_vencimento >= ?", dataInicio)
 		}
 		if dataFim != "" {
-			// Add time to end date to include the whole day if it's just a date string
-			if len(dataFim) == 10 { // YYYY-MM-DD
+			if len(dataFim) == 10 {
 				q = q.Where("data_vencimento <= ?", dataFim+" 23:59:59")
 			} else {
 				q = q.Where("data_vencimento <= ?", dataFim)
@@ -200,14 +211,10 @@ func (h *TransacaoHandler) GetSummary(c *gin.Context) {
 	var saidas Result
 	buildQuery(models.TipoTransacaoDespesa).Select("COALESCE(SUM(valor), 0) as total").Scan(&saidas)
 
-	summary := gin.H{
-		"totalEntradas": entradas.Total,
-		"totalSaidas":   saidas.Total,
-		"saldo":         entradas.Total - saidas.Total,
-		"receitas":      entradas.Total,
-		"despesas":      saidas.Total,
-		"resultado":     entradas.Total - saidas.Total,
-	}
-
-	c.JSON(http.StatusOK, summary)
+	c.JSON(http.StatusOK, gin.H{
+		"receitas":  entradas.Total,
+		"despesas":  saidas.Total,
+		"resultado": entradas.Total - saidas.Total,
+		"saldo":     entradas.Total - saidas.Total,
+	})
 }

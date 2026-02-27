@@ -33,6 +33,7 @@ func SetupRoutes(r *gin.Engine, db *gorm.DB) {
     transacaoHandler := handlers.NewTransacaoHandler(db)
     faturaHandler := handlers.NewFaturaHandler(db)
     contabilidadeHandler := handlers.NewContabilidadeHandler(db)
+    estoqueHandler := handlers.NewEstoqueHandler(db)
 
     // Routes
     api := r.Group("/api")
@@ -46,7 +47,7 @@ func SetupRoutes(r *gin.Engine, db *gorm.DB) {
         }
 
         // Protected routes
-        protected := api.Group("/")
+        protected := api.Group("")
         protected.Use(middleware.AuthMiddleware())
         protected.Use(middleware.AuditMiddleware(db)) // Add Audit Middleware
         {
@@ -144,6 +145,12 @@ func SetupRoutes(r *gin.Engine, db *gorm.DB) {
                 
                 // Dashboard routes
                 contabilidade.GET("/dashboard/fluxo-caixa", contabilidadeHandler.GetFluxoCaixa)
+            }
+
+            estoque := protected.Group("/estoque")
+            {
+                estoque.GET("/produtos", estoqueHandler.GetProdutos)
+                estoque.POST("/notas-fiscais", estoqueHandler.CreateNotaFiscal)
             }
             
             // Faturamento Reports/Extras
