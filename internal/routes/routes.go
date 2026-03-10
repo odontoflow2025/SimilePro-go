@@ -55,6 +55,7 @@ func SetupRoutes(r *gin.Engine, db *gorm.DB) {
             {
                 clinicas.POST("", clinicaHandler.Create)
                 clinicas.GET("", clinicaHandler.FindAll)
+                clinicas.GET("/rede", clinicaHandler.GetRede) // Added network route
                 clinicas.GET("/:id", clinicaHandler.FindOne)
             }
 
@@ -145,11 +146,13 @@ func SetupRoutes(r *gin.Engine, db *gorm.DB) {
                 
                 // Dashboard routes
                 contabilidade.GET("/dashboard/fluxo-caixa", contabilidadeHandler.GetFluxoCaixa)
+                contabilidade.GET("/dashboard/bi-metrics", contabilidadeHandler.GetBIDashboard) // Added BI metrics
             }
 
             estoque := protected.Group("/estoque")
             {
                 estoque.GET("/produtos", estoqueHandler.GetProdutos)
+                estoque.GET("/notas-fiscais", estoqueHandler.GetNotasFiscais)
                 estoque.POST("/notas-fiscais", estoqueHandler.CreateNotaFiscal)
             }
             

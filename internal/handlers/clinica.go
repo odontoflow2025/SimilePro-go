@@ -97,3 +97,38 @@ func (h *ClinicaHandler) FindOne(c *gin.Context) {
 
 	c.JSON(http.StatusOK, clinica)
 }
+
+// GetRede godoc
+// @Summary      Get clinic network
+// @Description  Retrieve all clinics that belong to the same network (Matriz and Filiais)
+// @Tags         clinicas
+// @Produce      json
+// @Security     BearerAuth
+// @Success      200  {array}  models.Clinica
+// @Router       /clinicas/rede [get]
+func (h *ClinicaHandler) GetRede(c *gin.Context) {
+	userClinicaID, _ := c.Get("clinicaID")
+	if userClinicaID == nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Clinic not identified"})
+		return
+	}
+
+	var userClinica models.Clinica
+	if err := h.DB.First(&userClinica, userClinicaID).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "User clinic not found"})
+		return
+	}
+
+	matrizID := userClinica.ID
+	if userClinica.MatrizID != nil {
+		matrizID = *userClinica.MatrizID
+	}
+
+	var clinicas []models.Clinica
+	if err := h.DB.Where("id = ? OR matriz_id = ?", matrizID, matrizID).Find(&clinicas).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch clinic network"})
+		return
+	}
+
+	c.JSON(http.StatusOK, clinicas)
+}

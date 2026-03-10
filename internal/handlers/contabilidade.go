@@ -18,6 +18,59 @@ func NewContabilidadeHandler(db *gorm.DB) *ContabilidadeHandler {
     return &ContabilidadeHandler{DB: db}
 }
 
+// Helper to determine clinic IDs for queries based on `clinica_id` and `rede` params
+func (h *ContabilidadeHandler) getClinicaIDs(c *gin.Context) ([]uint, error) {
+	userClinicaID, exists := c.Get("clinicaID")
+	if !exists || userClinicaID == nil {
+		return nil, gorm.ErrRecordNotFound
+	}
+
+	targetClinicaID := c.Query("clinica_id")
+	isRede := c.Query("rede") == "true"
+
+	var userClinica models.Clinica
+	if err := h.DB.First(&userClinica, userClinicaID).Error; err != nil {
+		return nil, err
+	}
+
+	matrizID := userClinica.ID
+	if userClinica.MatrizID != nil {
+		matrizID = *userClinica.MatrizID
+	}
+
+	var clinicaIDs []uint
+
+	if isRede {
+		// Network query: get all clinics sharing the same Matriz
+		var networkClinicas []models.Clinica
+		if err := h.DB.Where("id = ? OR matriz_id = ?", matrizID, matrizID).Find(&networkClinicas).Error; err != nil {
+			return nil, err
+		}
+		for _, nc := range networkClinicas {
+			clinicaIDs = append(clinicaIDs, nc.ID)
+		}
+	} else if targetClinicaID != "" && targetClinicaID != "all" {
+		// Verify if targeted clinic is in the same network
+		var target models.Clinica
+		if err := h.DB.First(&target, targetClinicaID).Error; err == nil {
+			targetMatriz := target.ID
+			if target.MatrizID != nil {
+				targetMatriz = *target.MatrizID
+			}
+			if targetMatriz == matrizID {
+				clinicaIDs = append(clinicaIDs, target.ID)
+			}
+		}
+	}
+
+	// Fallback to user's clinic
+	if len(clinicaIDs) == 0 {
+		clinicaIDs = append(clinicaIDs, userClinicaID.(uint))
+	}
+
+	return clinicaIDs, nil
+}
+
 // --- Centro de Custo ---
 
 // CreateCentroCusto godoc
@@ -182,6 +235,13 @@ func (h *ContabilidadeHandler) GetFluxoCaixa(c *gin.Context) {
 		Select("TO_CHAR(data_vencimento, 'YYYY-MM-DD') as date_str, tipo, SUM(valor) as total").
 		Where("status != ?", models.StatusTransacaoCancelado)
 
+	clinicaIDs, err := h.getClinicaIDs(c)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to resolve clinic IDs"})
+		return
+	}
+	query = query.Where("clinica_id IN ?", clinicaIDs)
+
 	if !startDate.IsZero() {
 		query = query.Where("data_vencimento BETWEEN ? AND ?", startDate, endDate)
 	} else {
@@ -231,4 +291,86 @@ func (h *ContabilidadeHandler) GetFluxoCaixa(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{"fluxo": fluxo})
+}
+
+// GetBIDashboard godoc
+// @Summary      Get BI Dashboard Metrics
+// @Description  Retrieve KPIs (Revenue, Patients, Appointments, Pending) for BI Dashboard
+// @Tags         contabilidade
+// @Produce      json
+// @Security     BearerAuth
+// @Param        clinica_id query string false "Specific Clinic ID"
+// @Param        rede       query bool   false "True to fetch network-wide data"
+// @Param        periodo    query string false "Period filter"
+// @Success      200        {object} map[string]interface{}
+// @Router       /financeiro/dashboard/bi-metrics [get]
+func (h *ContabilidadeHandler) GetBIDashboard(c *gin.Context) {
+	clinicaIDs, err := h.getClinicaIDs(c)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to resolve clinic IDs"})
+		return
+	}
+
+	periodo := c.Query("periodo")
+	var startDate, endDate time.Time
+	now := time.Now()
+
+	switch periodo {
+	case "1d":
+		startDate = time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
+	case "1w":
+		startDate = now.AddDate(0, 0, -7)
+	case "1m":
+		startDate = now.AddDate(0, -1, 0)
+	case "3m":
+		startDate = now.AddDate(0, -3, 0)
+	case "6m":
+		startDate = now.AddDate(0, -6, 0)
+	case "1y":
+		startDate = now.AddDate(-1, 0, 0)
+	default: // Total or 6m fallback
+		startDate = now.AddDate(0, -6, 0)
+	}
+	endDate = time.Date(now.Year(), now.Month(), now.Day(), 23, 59, 59, 0, now.Location())
+
+	// 1. Revenue
+	var revenue float64
+	h.DB.Model(&models.Transacao{}).
+		Where("clinica_id IN ? AND status = ? AND tipo = ?", clinicaIDs, models.StatusTransacaoPago, models.TipoTransacaoReceita).
+		Where("data_pagamento BETWEEN ? AND ?", startDate, endDate).
+		Select("COALESCE(SUM(valor), 0)").Scan(&revenue)
+
+	// 2. Pending Payments
+	var pending float64
+	h.DB.Model(&models.Transacao{}).
+		Where("clinica_id IN ? AND status = ? AND tipo = ?", clinicaIDs, models.StatusTransacaoPendente, models.TipoTransacaoReceita).
+		Where("data_vencimento BETWEEN ? AND ?", startDate, endDate). // Using due date for pending
+		Select("COALESCE(SUM(valor), 0)").Scan(&pending)
+
+	// 3. Appointments Held
+	var appointments int64
+	h.DB.Model(&models.Agendamento{}).
+		Where("clinica_id IN ? AND status = ?", clinicaIDs, models.StatusAgendamentoAtendido).
+		Where("data_hora_inicio BETWEEN ? AND ?", startDate, endDate).
+		Count(&appointments)
+
+	// 4. Active Patients (patients with at least one appointment in this period)
+	var activePatients int64
+	h.DB.Model(&models.Agendamento{}).
+		Where("clinica_id IN ? AND status = ?", clinicaIDs, models.StatusAgendamentoAtendido).
+		Where("data_hora_inicio BETWEEN ? AND ?", startDate, endDate).
+		Distinct("paciente_id").Count(&activePatients)
+
+	// Calculate variations (Mock logic for now - comparing to same previous period length)
+	// For a real production app we'd do the same queries for (startDate - diff) to (startDate)
+	// Using static variations as was in frontend for simplicity until user requests dynamic variation formulas
+
+	c.JSON(http.StatusOK, gin.H{
+		"metrics": map[string]interface{}{
+			"revenue":      revenue,
+			"pending":      pending,
+			"appointments": appointments,
+			"patients":     activePatients,
+		},
+	})
 }

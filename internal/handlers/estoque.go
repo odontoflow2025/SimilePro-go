@@ -145,3 +145,26 @@ func (h *EstoqueHandler) CreateNotaFiscal(c *gin.Context) {
 
 	c.JSON(http.StatusCreated, gin.H{"message": "Nota Fiscal lançada com sucesso, estoque atualizado e despesa gerada."})
 }
+
+// GetNotasFiscais retorna a lista de notas fiscais da clínica
+func (h *EstoqueHandler) GetNotasFiscais(c *gin.Context) {
+	clinicaIDRaw, _ := c.Get("clinicaID")
+	var clinicaID uint
+	switch v := clinicaIDRaw.(type) {
+	case uint:
+		clinicaID = v
+	case float64:
+		clinicaID = uint(v)
+	default:
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "ID da clínica inválido"})
+		return
+	}
+
+	nfs := []models.NotaFiscalEntrada{}
+	if err := h.DB.Preload("Itens.Produto").Where("clinica_id = ?", clinicaID).Order("data_emissao DESC").Find(&nfs).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Erro ao buscar notas fiscais"})
+		return
+	}
+
+	c.JSON(http.StatusOK, nfs)
+}
