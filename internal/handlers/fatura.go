@@ -3,6 +3,7 @@ package handlers
 import (
 	"net/http"
 	"odonto-flow-go/internal/models"
+	"strconv"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -25,6 +26,10 @@ type CreateFaturaInput struct {
     DataVencimento    time.Time `json:"dataVencimento" binding:"required"`
 }
 
+type PagarFaturaInput struct {
+    FormaPagamento string `json:"formaPagamento" binding:"required"`
+}
+
 // Create godoc
 // @Summary      Create an invoice
 // @Description  Generate a new invoice for a patient, optionally linked to a treatment plan
@@ -36,6 +41,12 @@ type CreateFaturaInput struct {
 // @Success      201    {object}  models.Fatura
 // @Router       /financeiro/faturas [post]
 func (h *FaturaHandler) Create(c *gin.Context) {
+	userClinicaID, err := getClinicaIDFromContext(c)
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": err.Error()})
+		return
+	}
+
 	var input CreateFaturaInput
 	if err := c.ShouldBindJSON(&input); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
@@ -43,7 +54,7 @@ func (h *FaturaHandler) Create(c *gin.Context) {
 	}
 
 	fatura := models.Fatura{
-		ClinicaID:         input.ClinicaID,
+		ClinicaID:         userClinicaID, // Force current clinic ID
 		PacienteID:        input.PacienteID,
 		PlanoTratamentoID: input.PlanoTratamentoID,
 		ValorTotal:        input.ValorTotal,
@@ -72,16 +83,26 @@ func (h *FaturaHandler) Create(c *gin.Context) {
 // @Success      200        {array}   models.Fatura
 // @Router       /financeiro/faturas [get]
 func (h *FaturaHandler) FindAll(c *gin.Context) {
-	clinicaID := c.Query("clinicaId")
+	userClinicaID, err := getClinicaIDFromContext(c)
+	userRole := getUserRoleFromContext(c)
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Clinic not identified"})
+		return
+	}
+
+	reqClinicaID := c.Query("clinicaId")
 	pacienteID := c.Query("pacienteId")
 	status := c.Query("status")
 
 	var faturas []models.Fatura
 	query := h.DB.Preload("Paciente").Preload("PlanoTratamento")
 
-	if clinicaID != "" {
-		query = query.Where("clinica_id = ?", clinicaID)
+	if userRole == "ADMIN_TOTAL" && reqClinicaID != "" {
+		query = query.Where("clinica_id = ?", reqClinicaID)
+	} else {
+		query = query.Where("clinica_id = ?", userClinicaID)
 	}
+
 	if pacienteID != "" {
 		query = query.Where("paciente_id = ?", pacienteID)
 	}
@@ -107,15 +128,145 @@ func (h *FaturaHandler) FindAll(c *gin.Context) {
 // @Success      200  {array}  models.Fatura
 // @Router       /financeiro/faturas/atrasadas [get]
 func (h *FaturaHandler) GetAtrasadas(c *gin.Context) {
+	userClinicaID, err := getClinicaIDFromContext(c)
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": err.Error()})
+		return
+	}
+
 	var faturas []models.Fatura
 	now := time.Now()
 
 	if err := h.DB.Preload("Paciente").Preload("PlanoTratamento").
-		Where("status = ? AND data_vencimento < ?", models.StatusFaturaPendente, now).
+		Where("clinica_id = ? AND status = ? AND data_vencimento < ?", userClinicaID, models.StatusFaturaPendente, now).
 		Find(&faturas).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch overdue invoices"})
 		return
 	}
 
 	c.JSON(http.StatusOK, faturas)
+}
+
+// PagarFatura godoc
+// @Summary      Mark an invoice as Paid
+// @Description  Pays an invoice and automatically generates a Financial Revenue Transaction
+// @Tags         financeiro
+// @Accept       json
+// @Produce      json
+// @Security     BearerAuth
+// @Param        id     path      string             true  "Invoice ID"
+// @Param        input  body      PagarFaturaInput   true  "Payment Method Info"
+// @Success      200    {object}  models.Fatura
+// @Router       /financeiro/faturas/{id}/pagar [post]
+func (h *FaturaHandler) PagarFatura(c *gin.Context) {
+	userClinicaID, err := getClinicaIDFromContext(c)
+	userRole := getUserRoleFromContext(c)
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Clinic not identified"})
+		return
+	}
+
+	id := c.Param("id")
+	var input PagarFaturaInput
+	if err := c.ShouldBindJSON(&input); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Forma de pagamento é obrigatória"})
+		return
+	}
+
+	var fatura models.Fatura
+	if err := h.DB.First(&fatura, id).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Fatura não encontrada"})
+		return
+	}
+
+	// Ownership check
+	if userRole != "ADMIN_TOTAL" && fatura.ClinicaID != userClinicaID {
+		c.JSON(http.StatusForbidden, gin.H{"error": "Não autorizado a pagar fatura de outra clínica"})
+		return
+	}
+
+	if fatura.Status != models.StatusFaturaPendente {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "A fatura não está pendente"})
+		return
+	}
+
+	// Começar transação GORM para garantir integridade
+	tx := h.DB.Begin()
+
+	fatura.Status = models.StatusFaturaPaga
+	if err := tx.Save(&fatura).Error; err != nil {
+		tx.Rollback()
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Falha ao atualizar fatura"})
+		return
+	}
+
+	// Criar Transacao Financeira (Receita Realizada do Caixa)
+	now := time.Now()
+	transacao := models.Transacao{
+		ClinicaID:      fatura.ClinicaID,
+		PacienteID:     &fatura.PacienteID,
+		Descricao:      "Pagamento Fatura ID " + strconv.Itoa(int(fatura.ID)),
+		Valor:          fatura.ValorTotal,
+		Tipo:           models.TipoTransacaoReceita,
+		Status:         models.StatusTransacaoPago,
+		DataVencimento: fatura.DataVencimento,
+		DataPagamento:  &now,
+		Categoria:      "Tratamentos Clínicos",
+		FormaPagamento: input.FormaPagamento,
+	}
+
+	if err := tx.Create(&transacao).Error; err != nil {
+		tx.Rollback()
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Falha ao gerar transação de receita"})
+		return
+	}
+
+	tx.Commit()
+
+	c.JSON(http.StatusOK, fatura)
+}
+
+// CancelarFatura godoc
+// @Summary      Cancel an invoice
+// @Description  Marks an open invoice as cancelled
+// @Tags         financeiro
+// @Produce      json
+// @Security     BearerAuth
+// @Param        id     path      string  true  "Invoice ID"
+// @Success      200    {object}  models.Fatura
+// @Router       /financeiro/faturas/{id}/cancelar [post]
+func (h *FaturaHandler) CancelarFatura(c *gin.Context) {
+	userClinicaID, err := getClinicaIDFromContext(c)
+	userRole := getUserRoleFromContext(c)
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Clinic not identified"})
+		return
+	}
+
+	id := c.Param("id")
+	
+	var fatura models.Fatura
+	if err := h.DB.First(&fatura, id).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Fatura não encontrada"})
+		return
+	}
+
+	// Ownership check
+	if userRole != "ADMIN_TOTAL" && fatura.ClinicaID != userClinicaID {
+		c.JSON(http.StatusForbidden, gin.H{"error": "Não autorizado a cancelar fatura de outra clínica"})
+		return
+	}
+
+	if fatura.Status == models.StatusFaturaPaga {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Fatura paga não pode ser cancelada"})
+		return
+	}
+
+	fatura.Status = models.StatusFaturaCancelada
+	if err := h.DB.Save(&fatura).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Falha ao cancelar fatura"})
+		return
+	}
+
+	c.JSON(http.StatusOK, fatura)
 }

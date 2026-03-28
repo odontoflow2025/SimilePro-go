@@ -34,6 +34,12 @@ type CreateConvenioInput struct {
 // @Success      201    {object}  models.Convenio
 // @Router       /convenios [post]
 func (h *ConvenioHandler) Create(c *gin.Context) {
+	userClinicaID, err := getClinicaIDFromContext(c)
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": err.Error()})
+		return
+	}
+
 	var input CreateConvenioInput
 	if err := c.ShouldBindJSON(&input); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
@@ -44,7 +50,7 @@ func (h *ConvenioHandler) Create(c *gin.Context) {
 		Nome:         input.Nome,
 		RegistroANS:  input.RegistroANS,
 		TabelaPrecos: input.TabelaPrecos,
-		ClinicaID:    input.ClinicaID,
+		ClinicaID:    userClinicaID, // Force current clinic ID
 	}
 
 	if err := h.DB.Create(&convenio).Error; err != nil {
@@ -65,13 +71,22 @@ func (h *ConvenioHandler) Create(c *gin.Context) {
 // @Success      200        {array}   models.Convenio
 // @Router       /convenios [get]
 func (h *ConvenioHandler) FindAll(c *gin.Context) {
-	clinicaID := c.Query("clinicaId")
+	userClinicaID, err := getClinicaIDFromContext(c)
+	userRole := getUserRoleFromContext(c)
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Clinic not identified"})
+		return
+	}
+
+	reqClinicaID := c.Query("clinicaId")
 
 	var convenios []models.Convenio
 	query := h.DB
 
-	if clinicaID != "" {
-		query = query.Where("clinica_id = ?", clinicaID)
+	if userRole == "ADMIN_TOTAL" && reqClinicaID != "" {
+		query = query.Where("clinica_id = ?", reqClinicaID)
+	} else {
+		query = query.Where("clinica_id = ?", userClinicaID)
 	}
 
 	if err := query.Find(&convenios).Error; err != nil {

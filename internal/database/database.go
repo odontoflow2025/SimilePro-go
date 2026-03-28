@@ -11,12 +11,13 @@ import (
 )
 
 func Connect(cfg *config.Config) (*gorm.DB, error) {
-    dsn := fmt.Sprintf("host=%s user=%s password=%s dbname=%s port=%s sslmode=disable TimeZone=America/Sao_Paulo",
+    dsn := fmt.Sprintf("host=%s user=%s password=%s dbname=%s port=%s sslmode=%s TimeZone=America/Sao_Paulo",
         cfg.DBHost,
         cfg.DBUser,
         cfg.DBPassword,
         cfg.DBName,
         cfg.DBPort,
+        cfg.DBSSLMode,
     )
 
     db, err := gorm.Open(postgres.Open(dsn), &gorm.Config{})
@@ -35,6 +36,8 @@ func Connect(cfg *config.Config) (*gorm.DB, error) {
         &models.AuditLog{}, &models.CentroCusto{}, &models.PlanoConta{}, 
         &models.ConfiguracaoSistema{}, &models.Alerta{}, &models.AcessoProntuario{},
         &models.Produto{}, &models.NotaFiscalEntrada{}, &models.ItemNF{}, &models.MovimentacaoEstoque{},
+        &models.CompetenciaFolha{}, &models.Holerite{}, &models.EventoHolerite{}, 
+        &models.NotaFiscalServico{}, &models.ImpostoGuia{}, &models.LancamentoContabil{},
     ); err != nil {
         log.Println("Warning: Auto-migration encountered an error (continuing):", err)
     }

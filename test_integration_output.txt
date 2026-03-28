@@ -1,0 +1,22 @@
+=== RUN   TestAgendamentoIsolation
+=== RUN   TestAgendamentoIsolation/Should_return_404/Forbidden_when_Clinic_A_tries_to_access_Appointment_from_Clinic_B
+=== RUN   TestAgendamentoIsolation/Should_return_OK_when_Clinic_B_accesses_its_own_Appointment
+--- PASS: TestAgendamentoIsolation (0.03s)
+    --- PASS: TestAgendamentoIsolation/Should_return_404/Forbidden_when_Clinic_A_tries_to_access_Appointment_from_Clinic_B (0.00s)
+    --- PASS: TestAgendamentoIsolation/Should_return_OK_when_Clinic_B_accesses_its_own_Appointment (0.00s)
+=== RUN   TestClinicIsolation
+=== RUN   TestClinicIsolation/Should_ignore_clinic_ID_from_body_and_use_auth_context_ID_(Clinic_Isolation_Support)
+--- PASS: TestClinicIsolation (0.01s)
+    --- PASS: TestClinicIsolation/Should_ignore_clinic_ID_from_body_and_use_auth_context_ID_(Clinic_Isolation_Support) (0.00s)
+=== RUN   TestPacienteIsolation
+=== RUN   TestPacienteIsolation/Should_return_restricted_view_(200_OK_+_flag)_when_Clinica_1_tries_to_access_patient_from_Clinica_2
+=== RUN   TestPacienteIsolation/Should_return_full_data_when_accessing_patient_from_same_clinic
+=== RUN   TestPacienteIsolation/Should_return_restricted_data_in_Global_Search_(FindAll)_for_external_clinic
+=== RUN   TestPacienteIsolation/Should_unlock_full_data_when_valid_Audit_Protocol_is_provided
+--- PASS: TestPacienteIsolation (0.01s)
+    --- PASS: TestPacienteIsolation/Should_return_restricted_view_(200_OK_+_flag)_when_Clinica_1_tries_to_access_patient_from_Clinica_2 (0.00s)
+    --- PASS: TestPacienteIsolation/Should_return_full_data_when_accessing_patient_from_same_clinic (0.00s)
+    --- PASS: TestPacienteIsolation/Should_return_restricted_data_in_Global_Search_(FindAll)_for_external_clinic (0.00s)
+    --- PASS: TestPacienteIsolation/Should_unlock_full_data_when_valid_Audit_Protocol_is_provided (0.00s)
+PASS
+ok  	odonto-flow-go/tests/integration	(cached)

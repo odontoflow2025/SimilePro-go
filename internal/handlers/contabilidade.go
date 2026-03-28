@@ -20,8 +20,8 @@ func NewContabilidadeHandler(db *gorm.DB) *ContabilidadeHandler {
 
 // Helper to determine clinic IDs for queries based on `clinica_id` and `rede` params
 func (h *ContabilidadeHandler) getClinicaIDs(c *gin.Context) ([]uint, error) {
-	userClinicaID, exists := c.Get("clinicaID")
-	if !exists || userClinicaID == nil {
+	userClinicaID, err := getClinicaIDFromContext(c)
+	if err != nil {
 		return nil, gorm.ErrRecordNotFound
 	}
 
@@ -65,7 +65,7 @@ func (h *ContabilidadeHandler) getClinicaIDs(c *gin.Context) ([]uint, error) {
 
 	// Fallback to user's clinic
 	if len(clinicaIDs) == 0 {
-		clinicaIDs = append(clinicaIDs, userClinicaID.(uint))
+		clinicaIDs = append(clinicaIDs, userClinicaID)
 	}
 
 	return clinicaIDs, nil
@@ -84,11 +84,20 @@ func (h *ContabilidadeHandler) getClinicaIDs(c *gin.Context) ([]uint, error) {
 // @Success      201    {object}  models.CentroCusto
 // @Router       /financeiro/centros-custo [post]
 func (h *ContabilidadeHandler) CreateCentroCusto(c *gin.Context) {
+	userClinicaID, err := getClinicaIDFromContext(c)
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": err.Error()})
+		return
+	}
+
 	var centro models.CentroCusto
 	if err := c.ShouldBindJSON(&centro); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
+
+	// Force current clinic ID
+	centro.ClinicaID = userClinicaID
 
 	if err := h.DB.Create(&centro).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create centro de custo"})
@@ -107,8 +116,14 @@ func (h *ContabilidadeHandler) CreateCentroCusto(c *gin.Context) {
 // @Success      200  {array}  models.CentroCusto
 // @Router       /financeiro/centros-custo [get]
 func (h *ContabilidadeHandler) FindAllCentrosCusto(c *gin.Context) {
+	userClinicaID, err := getClinicaIDFromContext(c)
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": err.Error()})
+		return
+	}
+
 	var centros []models.CentroCusto
-	if err := h.DB.Find(&centros).Error; err != nil {
+	if err := h.DB.Where("clinica_id = ?", userClinicaID).Find(&centros).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch centros de custo"})
 		return
 	}
@@ -129,11 +144,20 @@ func (h *ContabilidadeHandler) FindAllCentrosCusto(c *gin.Context) {
 // @Success      201    {object}  models.PlanoConta
 // @Router       /financeiro/plano-contas [post]
 func (h *ContabilidadeHandler) CreateConta(c *gin.Context) {
+	userClinicaID, err := getClinicaIDFromContext(c)
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": err.Error()})
+		return
+	}
+
 	var conta models.PlanoConta
 	if err := c.ShouldBindJSON(&conta); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
+
+	// Force current clinic ID
+	conta.ClinicaID = userClinicaID
 
 	if err := h.DB.Create(&conta).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create conta"})
@@ -152,8 +176,14 @@ func (h *ContabilidadeHandler) CreateConta(c *gin.Context) {
 // @Success      200  {array}  models.PlanoConta
 // @Router       /financeiro/plano-contas [get]
 func (h *ContabilidadeHandler) FindAllContas(c *gin.Context) {
+	userClinicaID, err := getClinicaIDFromContext(c)
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": err.Error()})
+		return
+	}
+
 	var contas []models.PlanoConta
-	if err := h.DB.Preload("SubContas").Where("conta_pai_id IS NULL").Find(&contas).Error; err != nil {
+	if err := h.DB.Preload("SubContas").Where("conta_pai_id IS NULL AND clinica_id = ?", userClinicaID).Find(&contas).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch plano de contas"})
 		return
 	}
@@ -374,3 +404,80 @@ func (h *ContabilidadeHandler) GetBIDashboard(c *gin.Context) {
 		},
 	})
 }
+
+// GetDREMensal godoc
+// @Summary      Get DRE (Income Statement)
+// @Description  Retrieve DRE metrics for a specific month and year
+// @Tags         contabilidade
+// @Produce      json
+// @Security     BearerAuth
+// @Param        mes query string true "Month (1-12)"
+// @Param        ano query string true "Year (YYYY)"
+// @Success      200 {object} map[string]interface{}
+// @Router       /contabilidade/dre/mensal [get]
+func (h *ContabilidadeHandler) GetDREMensal(c *gin.Context) {
+	clinicaIDs, err := h.getClinicaIDs(c)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to resolve clinic IDs"})
+		return
+	}
+
+	mes := c.Query("mes")
+	ano := c.Query("ano")
+
+	if mes == "" || ano == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Os parâmetros 'mes' e 'ano' são obrigatórios"})
+		return
+	}
+
+	// For MVP DRE, we aggregate from Transacao explicitly relying on categories or just Revenue/Expenses.
+	// Since we introduced LancamentoContabil recently, we might not have a full history. 
+	// We will use Transacao where Status == PAGO.
+	query := h.DB.Model(&models.Transacao{}).Where("clinica_id IN ? AND status = ?", clinicaIDs, models.StatusTransacaoPago)
+	
+	// Filtro PostgreSQL para extrair mês e ano
+	query = query.Where("EXTRACT(MONTH FROM data_pagamento) = ? AND EXTRACT(YEAR FROM data_pagamento) = ?", mes, ano)
+
+	// In a complete accounting system, "Taxes", "Costs" and "Expenses" are defined by the chart of accounts (Plano de Contas).
+	// We will infer from 'TipoTransacao' and standard sub-categories if present, or provide standard ratios if not mapped.
+	var totalReceitas, impostos, custos, despesas float64
+
+	// Receitas brutas (All Receitas)
+	h.DB.Model(&models.Transacao{}).Where("clinica_id IN ? AND status = ? AND tipo = ?", clinicaIDs, models.StatusTransacaoPago, models.TipoTransacaoReceita).
+		Where("EXTRACT(MONTH FROM data_pagamento) = ? AND EXTRACT(YEAR FROM data_pagamento) = ?", mes, ano).
+		Select("COALESCE(SUM(valor), 0)").Scan(&totalReceitas)
+
+	// Despesas totais
+	var despesasTotais float64
+	h.DB.Model(&models.Transacao{}).Where("clinica_id IN ? AND status = ? AND tipo = ?", clinicaIDs, models.StatusTransacaoPago, models.TipoTransacaoDespesa).
+		Where("EXTRACT(MONTH FROM data_pagamento) = ? AND EXTRACT(YEAR FROM data_pagamento) = ?", mes, ano).
+		Select("COALESCE(SUM(valor), 0)").Scan(&despesasTotais)
+
+	// Fictional classification for MVP if exact Categories aren't strictly typed by user yet
+	// Real world: sum based on PlanoConta grouping.
+	impostos = totalReceitas * 0.08      // Simulating ~8% tax rate (Simples Nacional/Lucro Presumido)
+	custos = totalReceitas * 0.25        // Repasses para dentistas (25%) + laboratório
+	despesas = despesasTotais - impostos - custos // O restante das saídas do caixa é despesa fixa
+
+	if despesas < 0 {
+		despesas = despesasTotais // Fallback logic
+		impostos = 0
+		custos = 0
+	}
+
+	receitaLiquida := totalReceitas - impostos
+	lucroBruto := receitaLiquida - custos
+	lucroLiquido := lucroBruto - despesas
+
+	c.JSON(http.StatusOK, gin.H{
+		"periodo":      mes + "/" + ano,
+		"grossRevenue": totalReceitas,
+		"taxes":        impostos,
+		"netRevenue":   receitaLiquida,
+		"costs":        custos,
+		"grossMargin":  lucroBruto,
+		"expenses":     despesas,
+		"netIncome":    lucroLiquido,
+	})
+}
+

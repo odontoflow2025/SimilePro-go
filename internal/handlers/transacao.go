@@ -44,6 +44,12 @@ type UpdateStatusTransacaoInput struct {
 // @Success      201    {object}  models.Transacao
 // @Router       /financeiro/transacoes [post]
 func (h *TransacaoHandler) Create(c *gin.Context) {
+	userClinicaID, err := getClinicaIDFromContext(c)
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": err.Error()})
+		return
+	}
+
 	var input CreateTransacaoInput
 	if err := c.ShouldBindJSON(&input); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
@@ -51,7 +57,7 @@ func (h *TransacaoHandler) Create(c *gin.Context) {
 	}
 
 	transacao := models.Transacao{
-		ClinicaID:      input.ClinicaID,
+		ClinicaID:      userClinicaID, // Force current clinic ID
 		PacienteID:     input.PacienteID,
 		Descricao:      input.Descricao,
 		Valor:          input.Valor,
@@ -84,7 +90,14 @@ func (h *TransacaoHandler) Create(c *gin.Context) {
 // @Success      200        {array}   models.Transacao
 // @Router       /financeiro/transacoes [get]
 func (h *TransacaoHandler) FindAll(c *gin.Context) {
-	clinicaID := c.Query("clinicaId")
+	userClinicaID, err := getClinicaIDFromContext(c)
+	userRole := getUserRoleFromContext(c)
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Clinic not identified"})
+		return
+	}
+
+	reqClinicaID := c.Query("clinicaId")
 	tipo := c.Query("tipo")
 	status := c.Query("status")
 	dataInicio := c.Query("dataInicio")
@@ -93,9 +106,12 @@ func (h *TransacaoHandler) FindAll(c *gin.Context) {
 	var transacoes []models.Transacao
 	query := h.DB.Preload("Paciente")
 
-	if clinicaID != "" {
-		query = query.Where("clinica_id = ?", clinicaID)
+	if userRole == "ADMIN_TOTAL" && reqClinicaID != "" {
+		query = query.Where("clinica_id = ?", reqClinicaID)
+	} else {
+		query = query.Where("clinica_id = ?", userClinicaID)
 	}
+
 	if tipo != "" {
 		query = query.Where("tipo = ?", tipo)
 	}
@@ -129,6 +145,13 @@ func (h *TransacaoHandler) FindAll(c *gin.Context) {
 // @Success      200    {object}  models.Transacao
 // @Router       /financeiro/transacoes/{id}/status [patch]
 func (h *TransacaoHandler) UpdateStatus(c *gin.Context) {
+	userClinicaID, err := getClinicaIDFromContext(c)
+	userRole := getUserRoleFromContext(c)
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Clinic not identified"})
+		return
+	}
+
 	id := c.Param("id")
 	var input UpdateStatusTransacaoInput
 	if err := c.ShouldBindJSON(&input); err != nil {
@@ -139,6 +162,12 @@ func (h *TransacaoHandler) UpdateStatus(c *gin.Context) {
 	var transacao models.Transacao
 	if err := h.DB.First(&transacao, id).Error; err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Transacao not found"})
+		return
+	}
+
+	// Ownership check
+	if userRole != "ADMIN_TOTAL" && transacao.ClinicaID != userClinicaID {
+		c.JSON(http.StatusForbidden, gin.H{"error": "Não autorizado a modificar transação de outra clínica"})
 		return
 	}
 
@@ -170,16 +199,9 @@ func (h *TransacaoHandler) UpdateStatus(c *gin.Context) {
 // @Success      200        {object}  map[string]float64
 // @Router       /financeiro/sumario [get]
 func (h *TransacaoHandler) GetSummary(c *gin.Context) {
-	clinicaIDRaw, _ := c.Get("clinicaID")
-	var clinicaID uint
-	
-	switch v := clinicaIDRaw.(type) {
-	case uint:
-		clinicaID = v
-	case float64:
-		clinicaID = uint(v)
-	default:
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "ID da clínica inválido ou ausente no contexto"})
+	clinicaID, err := getClinicaIDFromContext(c)
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": err.Error()})
 		return
 	}
 

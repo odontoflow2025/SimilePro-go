@@ -8,9 +8,9 @@ import (
 
 type Dentista struct {
     ID                 uint           `gorm:"primaryKey" json:"id"`
-    UsuarioID          uint           `gorm:"uniqueIndex;not null" json:"usuarioId"`
+    UsuarioID          uint           `gorm:"uniqueIndex:idx_user_clinica_den;not null" json:"usuarioId"`
     Usuario            User           `gorm:"foreignKey:UsuarioID" json:"usuario,omitempty"`
-    ClinicaID          uint           `json:"clinicaId"`
+    ClinicaID          uint           `gorm:"uniqueIndex:idx_user_clinica_den;not null" json:"clinicaId"`
     Clinica            *Clinica       `gorm:"foreignKey:ClinicaID" json:"clinica,omitempty"`
     CRO                string         `gorm:"uniqueIndex;not null" json:"cro"`
     Especialidade      string         `json:"especialidade"`

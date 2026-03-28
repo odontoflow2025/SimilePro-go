@@ -45,7 +45,7 @@ func TestPacienteIsolation(t *testing.T) {
 		c, _ := gin.CreateTestContext(w)
 		
 		// Set context for Clinica 1
-		testutils.SetTestContext(c, 1, clinica1.ID)
+		testutils.SetTestContext(c, 1, clinica1.ID, "DENTISTA")
 		c.Params = []gin.Param{{Key: "id", Value: fmt.Sprintf("%d", paciente.ID)}}
 
 		h.FindOne(c)
@@ -65,7 +65,7 @@ func TestPacienteIsolation(t *testing.T) {
 		w := httptest.NewRecorder()
 		c, _ := gin.CreateTestContext(w)
 		
-		testutils.SetTestContext(c, 2, clinica2.ID)
+		testutils.SetTestContext(c, 2, clinica2.ID, "DENTISTA")
 		c.Params = []gin.Param{{Key: "id", Value: fmt.Sprintf("%d", paciente.ID)}}
 
 		h.FindOne(c)
@@ -81,7 +81,7 @@ func TestPacienteIsolation(t *testing.T) {
 		w := httptest.NewRecorder()
 		c, _ := gin.CreateTestContext(w)
 		
-		testutils.SetTestContext(c, 1, clinica1.ID)
+		testutils.SetTestContext(c, 1, clinica1.ID, "DENTISTA")
 		c.Request = httptest.NewRequest("GET", "/api/pacientes?search="+paciente.CPF, nil)
 
 		h.FindAll(c)
@@ -99,7 +99,7 @@ func TestPacienteIsolation(t *testing.T) {
 		// 1. Generate Protocol
 		wGen := httptest.NewRecorder()
 		cGen, _ := gin.CreateTestContext(wGen)
-		testutils.SetTestContext(cGen, 1, clinica1.ID)
+		testutils.SetTestContext(cGen, 1, clinica1.ID, "DENTISTA")
 		
 		input := `{"pacienteId": ` + fmt.Sprintf("%d", paciente.ID) + `, "justificativa": "Necessidade clinica"}`
 		cGen.Request = httptest.NewRequest("POST", "/api/pacientes/protocolo-acesso", nil)
@@ -117,7 +117,7 @@ func TestPacienteIsolation(t *testing.T) {
 		// 2. Use Protocol to access
 		wAcc := httptest.NewRecorder()
 		cAcc, _ := gin.CreateTestContext(wAcc)
-		testutils.SetTestContext(cAcc, 1, clinica1.ID)
+		testutils.SetTestContext(cAcc, 1, clinica1.ID, "DENTISTA")
 		cAcc.Params = []gin.Param{{Key: "id", Value: fmt.Sprintf("%d", paciente.ID)}}
 		cAcc.Request = httptest.NewRequest("GET", "/api/pacientes/"+fmt.Sprintf("%d", paciente.ID)+"?protocolo="+protocolResp.NumeroProtocolo, nil)
 

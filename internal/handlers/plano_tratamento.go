@@ -45,6 +45,12 @@ type UpdateStatusPlanoInput struct {
 // @Success      201    {object}  models.PlanoTratamento
 // @Router       /planos-tratamento [post]
 func (h *PlanoTratamentoHandler) Create(c *gin.Context) {
+	userClinicaID, err := getClinicaIDFromContext(c)
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": err.Error()})
+		return
+	}
+
 	var input CreatePlanoInput
 	if err := c.ShouldBindJSON(&input); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
@@ -68,7 +74,7 @@ func (h *PlanoTratamentoHandler) Create(c *gin.Context) {
 	plano := models.PlanoTratamento{
 		PacienteID: input.PacienteID,
 		DentistaID: input.DentistaID,
-		ClinicaID:  input.ClinicaID,
+		ClinicaID:  userClinicaID, // Force current clinic ID
 		Status:     models.StatusPlanoOrcamento,
 		ValorTotal: valorTotal,
 		Itens:      itens,
@@ -93,15 +99,25 @@ func (h *PlanoTratamentoHandler) Create(c *gin.Context) {
 // @Success      200        {array}   models.PlanoTratamento
 // @Router       /planos-tratamento [get]
 func (h *PlanoTratamentoHandler) FindAll(c *gin.Context) {
-	clinicaID := c.Query("clinicaId")
+	userClinicaID, err := getClinicaIDFromContext(c)
+	userRole := getUserRoleFromContext(c)
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Clinic not identified"})
+		return
+	}
+
+	reqClinicaID := c.Query("clinicaId")
 	pacienteID := c.Query("pacienteId")
 
 	var planos []models.PlanoTratamento
 	query := h.DB.Preload("Paciente").Preload("Dentista").Preload("Itens").Preload("Itens.Procedimento")
 
-	if clinicaID != "" {
-		query = query.Where("clinica_id = ?", clinicaID)
+	if userRole == "ADMIN_TOTAL" && reqClinicaID != "" {
+		query = query.Where("clinica_id = ?", reqClinicaID)
+	} else {
+		query = query.Where("clinica_id = ?", userClinicaID)
 	}
+
 	if pacienteID != "" {
 		query = query.Where("paciente_id = ?", pacienteID)
 	}
@@ -125,10 +141,22 @@ func (h *PlanoTratamentoHandler) FindAll(c *gin.Context) {
 // @Failure      404  {object}  map[string]string
 // @Router       /planos-tratamento/{id} [get]
 func (h *PlanoTratamentoHandler) FindOne(c *gin.Context) {
+	userClinicaID, err := getClinicaIDFromContext(c)
+	userRole := getUserRoleFromContext(c)
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Clinic not identified"})
+		return
+	}
+
 	id := c.Param("id")
 	var plano models.PlanoTratamento
 	if err := h.DB.Preload("Paciente").Preload("Dentista").Preload("Itens").Preload("Itens.Procedimento").First(&plano, id).Error; err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Plano not found"})
+		return
+	}
+
+	if userRole != "ADMIN_TOTAL" && plano.ClinicaID != userClinicaID {
+		c.JSON(http.StatusForbidden, gin.H{"error": "Não autorizado a acessar plano de outra clínica"})
 		return
 	}
 
@@ -147,6 +175,13 @@ func (h *PlanoTratamentoHandler) FindOne(c *gin.Context) {
 // @Success      200    {object}  models.PlanoTratamento
 // @Router       /planos-tratamento/{id}/status [patch]
 func (h *PlanoTratamentoHandler) UpdateStatus(c *gin.Context) {
+	userClinicaID, err := getClinicaIDFromContext(c)
+	userRole := getUserRoleFromContext(c)
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Clinic not identified"})
+		return
+	}
+
 	id := c.Param("id")
 	var input UpdateStatusPlanoInput
 	if err := c.ShouldBindJSON(&input); err != nil {
@@ -157,6 +192,11 @@ func (h *PlanoTratamentoHandler) UpdateStatus(c *gin.Context) {
 	var plano models.PlanoTratamento
 	if err := h.DB.First(&plano, id).Error; err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Plano not found"})
+		return
+	}
+
+	if userRole != "ADMIN_TOTAL" && plano.ClinicaID != userClinicaID {
+		c.JSON(http.StatusForbidden, gin.H{"error": "Não autorizado a modificar plano de outra clínica"})
 		return
 	}
 

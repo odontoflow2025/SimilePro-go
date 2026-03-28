@@ -41,15 +41,15 @@ type UpdateStatusInput struct {
 // @Success      201    {object}  models.Agendamento
 // @Router       /agendamentos [post]
 func (h *AgendamentoHandler) Create(c *gin.Context) {
-	var input CreateAgendamentoInput
-	if err := c.ShouldBindJSON(&input); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+	userClinicaID, err := getClinicaIDFromContext(c)
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": err.Error()})
 		return
 	}
 
-	userClinicaID, _ := c.Get("clinicaID")
-	if userClinicaID == nil {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "Clinic not identified"})
+	var input CreateAgendamentoInput
+	if err := c.ShouldBindJSON(&input); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 
@@ -58,7 +58,7 @@ func (h *AgendamentoHandler) Create(c *gin.Context) {
 	agendamento := models.Agendamento{
 		PacienteID:       input.PacienteID,
 		DentistaID:       input.DentistaID,
-		ClinicaID:        userClinicaID.(uint),
+		ClinicaID:        userClinicaID, // Force current clinic ID
 		DataHoraInicio:   input.DataHoraInicio,
 		DataHoraFim:      input.DataHoraFim,
 		Motivo:           input.Motivo,
@@ -86,7 +86,14 @@ func (h *AgendamentoHandler) Create(c *gin.Context) {
 // @Success      200         {array}   models.Agendamento
 // @Router       /agendamentos [get]
 func (h *AgendamentoHandler) FindAll(c *gin.Context) {
-	userClinicaID, _ := c.Get("clinicaID")
+	userClinicaID, err := getClinicaIDFromContext(c)
+	userRole := getUserRoleFromContext(c)
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Clinic not identified"})
+		return
+	}
+
+	reqClinicaID := c.Query("clinicaId")
 	dataInicio := c.Query("dataInicio")
 	dataFim := c.Query("dataFim")
 	dentistaID := c.Query("dentistaId")
@@ -94,11 +101,10 @@ func (h *AgendamentoHandler) FindAll(c *gin.Context) {
 	var agendamentos []models.Agendamento
 	query := h.DB.Preload("Paciente").Preload("Dentista").Preload("Dentista.Usuario")
 
-	if userClinicaID != nil {
-		query = query.Where("clinica_id = ?", userClinicaID)
+	if userRole == "ADMIN_TOTAL" && reqClinicaID != "" {
+		query = query.Where("clinica_id = ?", reqClinicaID)
 	} else {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "Clinic not identified"})
-		return
+		query = query.Where("clinica_id = ?", userClinicaID)
 	}
 
 	if dentistaID != "" {
@@ -130,16 +136,21 @@ func (h *AgendamentoHandler) FindAll(c *gin.Context) {
 // @Failure      403  {object}  map[string]string
 // @Router       /agendamentos/{id} [get]
 func (h *AgendamentoHandler) FindOne(c *gin.Context) {
-    id := c.Param("id")
-    userClinicaID, _ := c.Get("clinicaID")
+    userClinicaID, err := getClinicaIDFromContext(c)
+    userRole := getUserRoleFromContext(c)
+    if err != nil {
+        c.JSON(http.StatusUnauthorized, gin.H{"error": "Clinic not identified"})
+        return
+    }
 
+    id := c.Param("id")
     var agendamento models.Agendamento
     if err := h.DB.Preload("Paciente").Preload("Dentista").First(&agendamento, id).Error; err != nil {
         c.JSON(http.StatusNotFound, gin.H{"error": "Agendamento not found"})
         return
     }
 
-    if userClinicaID != nil && agendamento.ClinicaID != userClinicaID.(uint) {
+    if userRole != "ADMIN_TOTAL" && agendamento.ClinicaID != userClinicaID {
         c.JSON(http.StatusForbidden, gin.H{"error": "Acesso negado: este agendamento pertence a outra clínica"})
         return
     }
@@ -159,9 +170,14 @@ func (h *AgendamentoHandler) FindOne(c *gin.Context) {
 // @Success      200    {object}  models.Agendamento
 // @Router       /agendamentos/{id}/status [patch]
 func (h *AgendamentoHandler) UpdateStatus(c *gin.Context) {
-	id := c.Param("id")
-	userClinicaID, _ := c.Get("clinicaID")
+	userClinicaID, err := getClinicaIDFromContext(c)
+	userRole := getUserRoleFromContext(c)
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Clinic not identified"})
+		return
+	}
 
+	id := c.Param("id")
 	var input UpdateStatusInput
 	if err := c.ShouldBindJSON(&input); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
@@ -174,7 +190,7 @@ func (h *AgendamentoHandler) UpdateStatus(c *gin.Context) {
 		return
 	}
 
-	if userClinicaID != nil && agendamento.ClinicaID != userClinicaID.(uint) {
+	if userRole != "ADMIN_TOTAL" && agendamento.ClinicaID != userClinicaID {
 		c.JSON(http.StatusForbidden, gin.H{"error": "Acesso negado: este agendamento pertence a outra clínica"})
 		return
 	}

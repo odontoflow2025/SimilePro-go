@@ -48,7 +48,7 @@ func TestAgendamentoIsolation(t *testing.T) {
 		w := httptest.NewRecorder()
 		c, _ := gin.CreateTestContext(w)
 		
-		testutils.SetTestContext(c, 1, clinica1.ID)
+		testutils.SetTestContext(c, 1, clinica1.ID, "DENTISTA")
 		c.Params = []gin.Param{{Key: "id", Value: fmt.Sprintf("%d", agendamento.ID)}}
 
 		h.FindOne(c)
@@ -61,7 +61,7 @@ func TestAgendamentoIsolation(t *testing.T) {
 		w := httptest.NewRecorder()
 		c, _ := gin.CreateTestContext(w)
 		
-		testutils.SetTestContext(c, 2, clinica2.ID)
+		testutils.SetTestContext(c, 2, clinica2.ID, "DENTISTA")
 		c.Params = []gin.Param{{Key: "id", Value: fmt.Sprintf("%d", agendamento.ID)}}
 
 		h.FindOne(c)

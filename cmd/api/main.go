@@ -44,7 +44,7 @@ func main() {
     r := gin.Default()
 
     // Setup Routes
-    routes.SetupRoutes(r, db)
+    routes.SetupRoutes(r, db, cfg)
 
     // Run Server
     log.Println("Server running on port " + cfg.ServerPort)

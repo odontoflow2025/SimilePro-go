@@ -1,0 +1,74 @@
+?   	odonto-flow-go/cmd/api	[no test files]
+?   	odonto-flow-go/cmd/seeder	[no test files]
+?   	odonto-flow-go/docs	[no test files]
+?   	odonto-flow-go/internal/config	[no test files]
+?   	odonto-flow-go/internal/database	[no test files]
+# odonto-flow-go/scripts
+scripts\check_migration.go:8:6: main redeclared in this block
+	scripts\check_final.go:7:6: other declaration of main
+scripts\check_user.go:7:6: main redeclared in this block
+	scripts\check_final.go:7:6: other declaration of main
+scripts\query_nf_by_number.go:46:6: main redeclared in this block
+	scripts\check_final.go:7:6: other declaration of main
+scripts\query_nf_by_value.go:11:6: Transacao redeclared in this block
+	scripts\query_nf_by_number.go:11:6: other declaration of Transacao
+scripts\query_nf_by_value.go:22:6: NotaFiscalEntrada redeclared in this block
+	scripts\query_nf_by_number.go:22:6: other declaration of NotaFiscalEntrada
+scripts\query_nf_by_value.go:31:6: ItemNF redeclared in this block
+	scripts\query_nf_by_number.go:31:6: other declaration of ItemNF
+scripts\query_nf_by_value.go:41:6: Produto redeclared in this block
+	scripts\query_nf_by_number.go:41:6: other declaration of Produto
+scripts\query_nf_by_value.go:46:6: main redeclared in this block
+	scripts\check_final.go:7:6: other declaration of main
+scripts\query_nf_details.go:11:6: Transacao redeclared in this block
+	scripts\query_nf_by_number.go:11:6: other declaration of Transacao
+scripts\query_nf_details.go:22:6: NotaFiscalEntrada redeclared in this block
+	scripts\query_nf_by_number.go:22:6: other declaration of NotaFiscalEntrada
+scripts\query_nf_details.go:22:6: too many errors
+ok  	odonto-flow-go/internal/handlers	(cached)
+
+2026/03/27 22:47:19 [31;1mC:/Users/jefeg/.gemini/antigravity/scratch/odonto-flow-go/internal/middleware/rbac_test.go:22 [35;1mconstraint failed: UNIQUE constraint failed: users.email (2067)
+[0m[33m[0.000ms] [34;1m[rows:0][0m INSERT INTO `users` (`nome`,`email`,`senha_hash`,`telefone`,`cpf`,`tipo_usuario`,`clinica_id`,`created_at`,`updated_at`,`deleted_at`) VALUES ("Dentista","","","","","DENTISTA",0,"2026-03-27 22:47:19.606","2026-03-27 22:47:19.606",NULL) RETURNING `id`
+
+2026/03/27 22:47:19 [31;1mC:/Users/jefeg/.gemini/antigravity/scratch/odonto-flow-go/internal/middleware/jwt_auth.go:71 [35;1mrecord not found
+[0m[33m[0.000ms] [34;1m[rows:0][0m SELECT * FROM `users` WHERE `users`.`id` = 0 AND `users`.`deleted_at` IS NULL ORDER BY `users`.`id` LIMIT 1
+
+2026/03/27 22:47:19 [31;1mC:/Users/jefeg/.gemini/antigravity/scratch/odonto-flow-go/internal/middleware/jwt_auth.go:71 [35;1mrecord not found
+[0m[33m[0.000ms] [34;1m[rows:0][0m SELECT * FROM `users` WHERE `users`.`id` = 0 AND `users`.`deleted_at` IS NULL ORDER BY `users`.`id` LIMIT 1
+--- FAIL: TestRequireRole (0.02s)
+    --- FAIL: TestRequireRole/Should_deny_DENTISTA_from_accessing_admin-only_route (0.00s)
+        rbac_test.go:44: 
+            	Error Trace:	C:/Users/jefeg/.gemini/antigravity/scratch/odonto-flow-go/internal/middleware/rbac_test.go:44
+            	Error:      	Not equal: 
+            	            	expected: 403
+            	            	actual  : 401
+            	Test:       	TestRequireRole/Should_deny_DENTISTA_from_accessing_admin-only_route
+    --- FAIL: TestRequireRole/Should_allow_multiple_roles (0.00s)
+        rbac_test.go:56: 
+            	Error Trace:	C:/Users/jefeg/.gemini/antigravity/scratch/odonto-flow-go/internal/middleware/rbac_test.go:56
+            	Error:      	Not equal: 
+            	            	expected: 200
+            	            	actual  : 401
+            	Test:       	TestRequireRole/Should_allow_multiple_roles
+        rbac_test.go:57: 
+            	Error Trace:	C:/Users/jefeg/.gemini/antigravity/scratch/odonto-flow-go/internal/middleware/rbac_test.go:57
+            	Error:      	Should be false
+            	Test:       	TestRequireRole/Should_allow_multiple_roles
+FAIL
+FAIL	odonto-flow-go/internal/middleware	0.138s
+?   	odonto-flow-go/internal/models	[no test files]
+?   	odonto-flow-go/internal/rnds	[no test files]
+?   	odonto-flow-go/internal/routes	[no test files]
+?   	odonto-flow-go/internal/services	[no test files]
+?   	odonto-flow-go/pkg/rnds	[no test files]
+FAIL	odonto-flow-go/scripts [build failed]
+?   	odonto-flow-go/scripts/check_users	[no test files]
+?   	odonto-flow-go/scripts/debug	[no test files]
+?   	odonto-flow-go/scripts/fix_users	[no test files]
+?   	odonto-flow-go/scripts/force_fix_users	[no test files]
+?   	odonto-flow-go/scripts/promote_admin	[no test files]
+?   	odonto-flow-go/scripts/seeder_estoque	[no test files]
+?   	odonto-flow-go/scripts/test_api	[no test files]
+ok  	odonto-flow-go/tests/integration	(cached)
+?   	odonto-flow-go/tests/testutils	[no test files]
+FAIL

@@ -12,6 +12,7 @@ type Config struct {
     DBName     string `mapstructure:"DB_NAME"`
     ServerPort string `mapstructure:"SERVER_PORT"`
     JWTSecret  string `mapstructure:"JWT_SECRET"`
+    DBSSLMode  string `mapstructure:"DB_SSL_MODE"`
 }
 
 func LoadConfig() (*Config, error) {
@@ -27,9 +28,12 @@ func LoadConfig() (*Config, error) {
         return nil, err
     }
 
-    // Set defaults
     if config.ServerPort == "" {
         config.ServerPort = "8080"
+    }
+
+    if config.DBSSLMode == "" {
+        config.DBSSLMode = "disable"
     }
 
     return &config, nil

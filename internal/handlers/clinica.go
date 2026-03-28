@@ -68,8 +68,17 @@ func (h *ClinicaHandler) Create(c *gin.Context) {
 // @Success      200  {array}  models.Clinica
 // @Router       /clinicas [get]
 func (h *ClinicaHandler) FindAll(c *gin.Context) {
+	userClinicaID, _ := getClinicaIDFromContext(c)
+	userRole := getUserRoleFromContext(c)
+
 	var clinicas []models.Clinica
-	if err := h.DB.Find(&clinicas).Error; err != nil {
+	query := h.DB
+
+	if userRole != "ADMIN_TOTAL" {
+		query = query.Where("id = ?", userClinicaID)
+	}
+
+	if err := query.Find(&clinicas).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch clinicas"})
 		return
 	}
@@ -88,10 +97,18 @@ func (h *ClinicaHandler) FindAll(c *gin.Context) {
 // @Failure      404  {object}  map[string]string
 // @Router       /clinicas/{id} [get]
 func (h *ClinicaHandler) FindOne(c *gin.Context) {
+	userClinicaID, _ := getClinicaIDFromContext(c)
+	userRole := getUserRoleFromContext(c)
+
 	id := c.Param("id")
 	var clinica models.Clinica
 	if err := h.DB.First(&clinica, id).Error; err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Clinica not found"})
+		return
+	}
+
+	if userRole != "ADMIN_TOTAL" && clinica.ID != userClinicaID {
+		c.JSON(http.StatusForbidden, gin.H{"error": "Acesso negado: você não tem permissão para ver dados desta clínica"})
 		return
 	}
 

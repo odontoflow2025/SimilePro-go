@@ -49,7 +49,16 @@ func (h *PacienteHandler) Create(c *gin.Context) {
 		return
 	}
 
-	// Generate unique code (Simple version: OF-YYYY-ID-Hash? No, better use timestamp/random for now)
+	// Force ClinicaID from Authenticated User context for data isolation
+	userClinicaID, exists := c.Get("clinicaID")
+	if !exists {
+		c.JSON(http.StatusForbidden, gin.H{"error": "User is not associated with any clinic"})
+		return
+	}
+
+	clinicaID := userClinicaID.(uint)
+
+	// Generate unique code
 	codigoUnico := "OF-" + time.Now().Format("2006") + "-" + strconv.FormatInt(time.Now().UnixNano()%10000, 10)
 
 	paciente := models.Paciente{
@@ -62,7 +71,7 @@ func (h *PacienteHandler) Create(c *gin.Context) {
 		TelefonePrincipal: input.TelefonePrincipal,
 		Email:             input.Email,
 		EnderecoCompleto:  input.EnderecoCompleto,
-		ClinicaID:         input.ClinicaID,
+		ClinicaID:         clinicaID,
 	}
 
 	if err := h.DB.Create(&paciente).Error; err != nil {

@@ -2,7 +2,6 @@ package handlers
 
 import (
 	"net/http"
-	"odonto-flow-go/internal/config"
 	"odonto-flow-go/internal/models"
 	"time"
 
@@ -13,11 +12,12 @@ import (
 )
 
 type AuthHandler struct {
-    DB *gorm.DB
+    DB        *gorm.DB
+    JWTSecret string
 }
 
-func NewAuthHandler(db *gorm.DB) *AuthHandler {
-    return &AuthHandler{DB: db}
+func NewAuthHandler(db *gorm.DB, jwtSecret string) *AuthHandler {
+    return &AuthHandler{DB: db, JWTSecret: jwtSecret}
 }
 
 type RegisterInput struct {
@@ -66,13 +66,20 @@ func (h *AuthHandler) Register(c *gin.Context) {
 		return
 	}
 
+	// Security check for role
+	tipoUsuario := input.TipoUsuario
+	// For public registration, block internal admin roles
+	if tipoUsuario == "ADMIN_TOTAL" || tipoUsuario == "ADMIN_GERENCIAL" || tipoUsuario == "" {
+		tipoUsuario = "RECEPCIONISTA" // Default to lower privilege
+	}
+
 	user := models.User{
 		Nome:        input.Nome,
 		Email:       input.Email,
 		SenhaHash:   string(hashedPassword),
 		Telefone:    input.Telefone,
 		CPF:         input.CPF,
-		TipoUsuario: input.TipoUsuario,
+		TipoUsuario: tipoUsuario,
 	}
 
 	if err := h.DB.Create(&user).Error; err != nil {
@@ -80,7 +87,7 @@ func (h *AuthHandler) Register(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"message": "User registered successfully"})
+	c.JSON(http.StatusOK, gin.H{"message": "User registered successfully", "user": user})
 }
 
 // Login godoc
@@ -112,7 +119,6 @@ func (h *AuthHandler) Login(c *gin.Context) {
     }
 
     // Generate JWT
-    cfg, _ := config.LoadConfig()
     token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
         "sub":         user.ID,
         "name":        user.Nome,
@@ -122,7 +128,7 @@ func (h *AuthHandler) Login(c *gin.Context) {
         "exp":         time.Now().Add(time.Hour * 24).Unix(),
     })
 
-    tokenString, err := token.SignedString([]byte(cfg.JWTSecret))
+    tokenString, err := token.SignedString([]byte(h.JWTSecret))
     if err != nil {
         c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to generate token"})
         return

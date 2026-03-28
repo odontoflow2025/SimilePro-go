@@ -1,0 +1,32 @@
+# odonto-flow-go
+.\check_migration.go:3:1: "fmt" imported and not used
+.\check_migration.go:8:6: main redeclared in this block
+	.\check_final.go:7:6: other declaration of main
+.\check_migration.go:13:1: undefined: tln
+.\check_migration.go:15:1: undefined: tln
+.\check_user.go:3:1: "fmt" imported and not used
+.\check_user.go:7:6: main redeclared in this block
+	.\check_final.go:7:6: other declaration of main
+.\check_user.go:13:1: undefined: tf
+# odonto-flow-go/cmd
+cmd\query_nf_by_value.go:11:6: Transacao redeclared in this block
+	cmd\query_nf_by_number.go:11:6: other declaration of Transacao
+cmd\query_nf_by_value.go:22:6: NotaFiscalEntrada redeclared in this block
+	cmd\query_nf_by_number.go:22:6: other declaration of NotaFiscalEntrada
+cmd\query_nf_by_value.go:31:6: ItemNF redeclared in this block
+	cmd\query_nf_by_number.go:31:6: other declaration of ItemNF
+cmd\query_nf_by_value.go:41:6: Produto redeclared in this block
+	cmd\query_nf_by_number.go:41:6: other declaration of Produto
+cmd\query_nf_by_value.go:46:6: main redeclared in this block
+	cmd\query_nf_by_number.go:46:6: other declaration of main
+cmd\query_nf_details.go:11:6: Transacao redeclared in this block
+	cmd\query_nf_by_number.go:11:6: other declaration of Transacao
+cmd\query_nf_details.go:22:6: NotaFiscalEntrada redeclared in this block
+	cmd\query_nf_by_number.go:22:6: other declaration of NotaFiscalEntrada
+cmd\query_nf_details.go:31:6: ItemNF redeclared in this block
+	cmd\query_nf_by_number.go:31:6: other declaration of ItemNF
+cmd\query_nf_details.go:41:6: Produto redeclared in this block
+	cmd\query_nf_by_number.go:41:6: other declaration of Produto
+cmd\query_nf_details.go:46:6: main redeclared in this block
+	cmd\query_nf_by_number.go:46:6: other declaration of main
+cmd\query_nf_details.go:46:6: too many errors

@@ -80,8 +80,21 @@ func (h *DentistaHandler) FindAll(c *gin.Context) {
 		return
 	}
 
+	userRole, _ := c.Get("userRole")
+
+	query := h.DB.Preload("Usuario")
+
+	if userRole == "ADMIN_TOTAL" {
+		reqClinicaID := c.Query("clinicaId")
+		if reqClinicaID != "" {
+			query = query.Where("clinica_id = ?", reqClinicaID)
+		}
+	} else {
+		query = query.Where("clinica_id = ?", userClinicaID)
+	}
+
 	var dentistas []models.Dentista
-	if err := h.DB.Preload("Usuario").Where("clinica_id = ?", userClinicaID).Find(&dentistas).Error; err != nil {
+	if err := query.Find(&dentistas).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch dentistas"})
 		return
 	}

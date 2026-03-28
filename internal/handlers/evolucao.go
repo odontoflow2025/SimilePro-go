@@ -38,6 +38,12 @@ type CreateEvolucaoInput struct {
 // @Success      201    {object}  models.Evolucao
 // @Router       /evolucoes [post]
 func (h *EvolucaoHandler) Create(c *gin.Context) {
+	userClinicaID, err := getClinicaIDFromContext(c)
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": err.Error()})
+		return
+	}
+
 	var input CreateEvolucaoInput
 	if err := c.ShouldBindJSON(&input); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
@@ -47,7 +53,7 @@ func (h *EvolucaoHandler) Create(c *gin.Context) {
 	evolucao := models.Evolucao{
 		PacienteID:              input.PacienteID,
 		DentistaID:              input.DentistaID,
-		ClinicaID:               input.ClinicaID,
+		ClinicaID:               userClinicaID, // Force current clinic ID
 		Descricao:               input.Descricao,
 		Data:                    input.Data,
 		ProcedimentoRealizadoID: input.ProcedimentoRealizadoID,
@@ -75,17 +81,27 @@ func (h *EvolucaoHandler) Create(c *gin.Context) {
 // @Success      200        {array}   models.Evolucao
 // @Router       /evolucoes [get]
 func (h *EvolucaoHandler) FindAll(c *gin.Context) {
+	userClinicaID, err := getClinicaIDFromContext(c)
+	userRole := getUserRoleFromContext(c)
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Clinic not identified"})
+		return
+	}
+
 	pacienteID := c.Query("pacienteId")
-	clinicaID := c.Query("clinicaId")
+	reqClinicaID := c.Query("clinicaId")
 
 	var evolucoes []models.Evolucao
 	query := h.DB.Preload("Paciente").Preload("Dentista").Preload("ProcedimentoRealizado")
 
+	if userRole == "ADMIN_TOTAL" && reqClinicaID != "" {
+		query = query.Where("clinica_id = ?", reqClinicaID)
+	} else {
+		query = query.Where("clinica_id = ?", userClinicaID)
+	}
+
 	if pacienteID != "" {
 		query = query.Where("paciente_id = ?", pacienteID)
-	}
-	if clinicaID != "" {
-		query = query.Where("clinica_id = ?", clinicaID)
 	}
 
 	if err := query.Order("data desc").Find(&evolucoes).Error; err != nil {

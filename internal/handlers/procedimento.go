@@ -34,15 +34,15 @@ type CreateProcedimentoInput struct {
 // @Success      201    {object}  models.Procedimento
 // @Router       /procedimentos [post]
 func (h *ProcedimentoHandler) Create(c *gin.Context) {
-	var input CreateProcedimentoInput
-	if err := c.ShouldBindJSON(&input); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+	userClinicaID, err := getClinicaIDFromContext(c)
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": err.Error()})
 		return
 	}
 
-	userClinicaID, _ := c.Get("clinicaID")
-	if userClinicaID == nil {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "Clinic not identified"})
+	var input CreateProcedimentoInput
+	if err := c.ShouldBindJSON(&input); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 
@@ -51,7 +51,7 @@ func (h *ProcedimentoHandler) Create(c *gin.Context) {
 		Codigo:          input.Codigo,
 		ValorReferencia: input.ValorReferencia,
 		Ativo:           input.Ativo,
-		ClinicaID:       userClinicaID.(uint),
+		ClinicaID:       userClinicaID,
 	}
 
 	if err := h.DB.Create(&procedimento).Error; err != nil {
@@ -71,17 +71,14 @@ func (h *ProcedimentoHandler) Create(c *gin.Context) {
 // @Success      200  {array}  models.Procedimento
 // @Router       /procedimentos [get]
 func (h *ProcedimentoHandler) FindAll(c *gin.Context) {
-	userClinicaID, _ := c.Get("clinicaID")
-
-	var procedimentos []models.Procedimento
-	query := h.DB
-
-	if userClinicaID != nil {
-		query = query.Where("clinica_id = ?", userClinicaID)
-	} else {
+	userClinicaID, err := getClinicaIDFromContext(c)
+	if err != nil {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "Clinic not identified"})
 		return
 	}
+
+	var procedimentos []models.Procedimento
+	query := h.DB.Where("clinica_id = ?", userClinicaID)
 
 	if err := query.Find(&procedimentos).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch procedimentos"})

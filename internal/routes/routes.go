@@ -2,6 +2,7 @@ package routes
 
 import (
 	"net/http"
+	"odonto-flow-go/internal/config"
 	"odonto-flow-go/internal/handlers"
 	"odonto-flow-go/internal/middleware"
 
@@ -14,12 +15,12 @@ import (
 	ginSwagger "github.com/swaggo/gin-swagger"
 )
 
-func SetupRoutes(r *gin.Engine, db *gorm.DB) {
+func SetupRoutes(r *gin.Engine, db *gorm.DB, cfg *config.Config) {
     // Middleware
     r.Use(middleware.CORSMiddleware())
 
     // Handlers
-    authHandler := handlers.NewAuthHandler(db)
+    authHandler := handlers.NewAuthHandler(db, cfg.JWTSecret)
     clinicaHandler := handlers.NewClinicaHandler(db)
     dentistaHandler := handlers.NewDentistaHandler(db)
     pacienteHandler := handlers.NewPacienteHandler(db)
@@ -34,6 +35,8 @@ func SetupRoutes(r *gin.Engine, db *gorm.DB) {
     faturaHandler := handlers.NewFaturaHandler(db)
     contabilidadeHandler := handlers.NewContabilidadeHandler(db)
     estoqueHandler := handlers.NewEstoqueHandler(db)
+    usuarioHandler := handlers.NewUsuarioHandler(db)
+    fiscalHandler := handlers.NewFiscalHandler(db)
 
     // Routes
     api := r.Group("/api")
@@ -48,14 +51,14 @@ func SetupRoutes(r *gin.Engine, db *gorm.DB) {
 
         // Protected routes
         protected := api.Group("")
-        protected.Use(middleware.AuthMiddleware())
+        protected.Use(middleware.AuthMiddleware(cfg.JWTSecret))
         protected.Use(middleware.AuditMiddleware(db)) // Add Audit Middleware
         {
             clinicas := protected.Group("/clinicas")
             {
-                clinicas.POST("", clinicaHandler.Create)
+                clinicas.POST("", middleware.RequireRole(db, "ADMIN_TOTAL", "ADMIN_GERENCIAL"), clinicaHandler.Create)
                 clinicas.GET("", clinicaHandler.FindAll)
-                clinicas.GET("/rede", clinicaHandler.GetRede) // Added network route
+                clinicas.GET("/rede", clinicaHandler.GetRede)
                 clinicas.GET("/:id", clinicaHandler.FindOne)
             }
 
@@ -66,6 +69,7 @@ func SetupRoutes(r *gin.Engine, db *gorm.DB) {
             }
 
             pacientes := protected.Group("/pacientes")
+            pacientes.Use(middleware.RequireRole(db, "ADMIN_TOTAL", "ADMIN_GERENCIAL", "DENTISTA", "RECEPCIONISTA", "ASSISTENTE"))
             {
                 pacientes.POST("", pacienteHandler.Create)
                 pacientes.GET("", pacienteHandler.FindAll)
@@ -82,9 +86,28 @@ func SetupRoutes(r *gin.Engine, db *gorm.DB) {
             }
 
             funcionarios := protected.Group("/funcionarios")
+            funcionarios.Use(middleware.RequireRole(db, "ADMIN_TOTAL", "ADMIN_GERENCIAL"))
             {
                 funcionarios.POST("", funcionarioHandler.Create)
                 funcionarios.GET("", funcionarioHandler.FindAll)
+                funcionarios.PATCH("/:id/demitir", funcionarioHandler.Demitir)
+            }
+
+            // Recursos Humanos e Folha
+            folhaHandler := handlers.NewFolhaHandler(db)
+            rh := protected.Group("/rh")
+            rh.Use(middleware.RequireRole(db, "ADMIN_TOTAL", "ADMIN_GERENCIAL"))
+            {
+                rh.POST("/folha/processar", folhaHandler.ProcessarFolha)
+                rh.GET("/folha", folhaHandler.GetHolerites)
+            }
+
+            usuarios := protected.Group("/usuarios")
+            usuarios.Use(middleware.RequireRole(db, "ADMIN_TOTAL"))
+            {
+                usuarios.GET("", usuarioHandler.FindAll)
+                usuarios.PATCH("/:id", usuarioHandler.Update)
+                usuarios.DELETE("/:id", usuarioHandler.Delete)
             }
 
             procedimentos := protected.Group("/procedimentos")
@@ -94,13 +117,15 @@ func SetupRoutes(r *gin.Engine, db *gorm.DB) {
             }
 
             agendamentos := protected.Group("/agendamentos")
+            agendamentos.Use(middleware.RequireRole(db, "ADMIN_TOTAL", "ADMIN_GERENCIAL", "DENTISTA", "RECEPCIONISTA", "ASSISTENTE"))
             {
                 agendamentos.POST("", agendamentoHandler.Create)
                 agendamentos.GET("", agendamentoHandler.FindAll)
                 agendamentos.PATCH("/:id/status", agendamentoHandler.UpdateStatus)
             }
 
-            planos := protected.Group("/planos-tratamento") // Changed from /planos
+            planos := protected.Group("/planos-tratamento")
+            planos.Use(middleware.RequireRole(db, "ADMIN_TOTAL", "ADMIN_GERENCIAL", "DENTISTA", "ASSISTENTE"))
             {
                 planos.POST("", planoTratamentoHandler.Create)
                 planos.GET("", planoTratamentoHandler.FindAll)
@@ -109,6 +134,7 @@ func SetupRoutes(r *gin.Engine, db *gorm.DB) {
             }
 
             evolucoes := protected.Group("/evolucoes")
+            evolucoes.Use(middleware.RequireRole(db, "ADMIN_TOTAL", "ADMIN_GERENCIAL", "DENTISTA", "ASSISTENTE"))
             {
                 evolucoes.POST("", evolucaoHandler.Create)
                 evolucoes.GET("", evolucaoHandler.FindAll)
@@ -120,22 +146,27 @@ func SetupRoutes(r *gin.Engine, db *gorm.DB) {
                 convenios.GET("", convenioHandler.FindAll)
             }
 
-            transacoes := protected.Group("/transacoes-financeiras") // Changed from /transacoes
+            transacoes := protected.Group("/transacoes-financeiras")
+            transacoes.Use(middleware.RequireRole(db, "ADMIN_TOTAL", "ADMIN_GERENCIAL", "FATURISTA"))
             {
                 transacoes.POST("", transacaoHandler.Create)
                 transacoes.GET("", transacaoHandler.FindAll)
-                transacoes.GET("/resumo", transacaoHandler.GetSummary) // Added missing route
+                transacoes.GET("/resumo", transacaoHandler.GetSummary)
                 transacoes.PATCH("/:id/status", transacaoHandler.UpdateStatus)
             }
 
-            faturas := protected.Group("/faturamento/faturas") // Changed from /faturas
+            faturas := protected.Group("/faturamento/faturas")
+            faturas.Use(middleware.RequireRole(db, "ADMIN_TOTAL", "ADMIN_GERENCIAL", "FATURISTA"))
             {
                 faturas.POST("", faturaHandler.Create)
                 faturas.GET("", faturaHandler.FindAll)
-                faturas.GET("/atrasadas", faturaHandler.GetAtrasadas) // Added missing route
+                faturas.GET("/atrasadas", faturaHandler.GetAtrasadas)
+                faturas.POST("/:id/pagar", faturaHandler.PagarFatura)
+                faturas.POST("/:id/cancelar", faturaHandler.CancelarFatura)
             }
 
             contabilidade := protected.Group("/contabilidade")
+            contabilidade.Use(middleware.RequireRole(db, "ADMIN_TOTAL", "ADMIN_GERENCIAL", "FATURISTA"))
             {
                 contabilidade.POST("/centros-custo", contabilidadeHandler.CreateCentroCusto)
                 contabilidade.GET("/centros-custo", contabilidadeHandler.FindAllCentrosCusto)
@@ -146,10 +177,18 @@ func SetupRoutes(r *gin.Engine, db *gorm.DB) {
                 
                 // Dashboard routes
                 contabilidade.GET("/dashboard/fluxo-caixa", contabilidadeHandler.GetFluxoCaixa)
-                contabilidade.GET("/dashboard/bi-metrics", contabilidadeHandler.GetBIDashboard) // Added BI metrics
+                contabilidade.GET("/dashboard/bi-metrics", contabilidadeHandler.GetBIDashboard)
+                contabilidade.GET("/dre/mensal", contabilidadeHandler.GetDREMensal)
+            }
+
+            fiscal := protected.Group("/fiscal")
+            {
+                fiscal.GET("/nfs", fiscalHandler.GetNotasFiscais)
+                fiscal.POST("/nfs/emitir", fiscalHandler.EmitirNotaFiscal)
             }
 
             estoque := protected.Group("/estoque")
+            estoque.Use(middleware.RequireRole(db, "ADMIN_TOTAL", "ADMIN_GERENCIAL", "RECEPCIONISTA", "ASSISTENTE"))
             {
                 estoque.GET("/produtos", estoqueHandler.GetProdutos)
                 estoque.GET("/notas-fiscais", estoqueHandler.GetNotasFiscais)
@@ -164,9 +203,9 @@ func SetupRoutes(r *gin.Engine, db *gorm.DB) {
                }) 
             }
 
-            // Admin Stats & Configs
             adminHandler := handlers.NewAdminHandler(db)
             admin := protected.Group("/administracao")
+            admin.Use(middleware.RequireRole(db, "ADMIN_TOTAL"))
             {
                 admin.GET("/estatisticas", adminHandler.GetStats)
                 admin.GET("/configuracoes", adminHandler.ListConfigs)
@@ -180,10 +219,11 @@ func SetupRoutes(r *gin.Engine, db *gorm.DB) {
             // Assinaturas (SaaS)
             assinaturaHandler := handlers.NewAssinaturaHandler(db)
             assinaturas := protected.Group("/assinaturas")
+            assinaturas.Use(middleware.RequireRole(db, "ADMIN_TOTAL"))
             {
                 assinaturas.GET("/planos", assinaturaHandler.GetPlanos)
                 assinaturas.GET("/status", assinaturaHandler.GetStatus)
-                assinaturas.POST("/", assinaturaHandler.Assinar) // Upgrade/Change plan
+                assinaturas.POST("/", assinaturaHandler.Assinar)
             }
 
             protected.POST("/pacientes/:id/anamnese", anamneseHandler.CreateOrUpdate)
