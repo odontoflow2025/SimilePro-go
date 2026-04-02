@@ -18,6 +18,7 @@ import (
 func SetupRoutes(r *gin.Engine, db *gorm.DB, cfg *config.Config) {
     // Middleware
     r.Use(middleware.CORSMiddleware())
+    r.Use(middleware.TimezoneInjector())
 
     // Handlers
     authHandler := handlers.NewAuthHandler(db, cfg.JWTSecret)
@@ -47,6 +48,12 @@ func SetupRoutes(r *gin.Engine, db *gorm.DB, cfg *config.Config) {
         {
             auth.POST("/login", authHandler.Login)
             auth.POST("/signup", authHandler.Register) // Changed from /register to match original
+        }
+
+        // Webhooks (Unprotected by JWT, validated internally by signature)
+        webhooks := api.Group("/webhooks")
+        {
+            webhooks.POST("/dock/payment", handlers.HandleDockWebhook(db))
         }
 
         // Protected routes
