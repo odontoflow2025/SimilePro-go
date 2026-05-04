@@ -37,12 +37,57 @@ func (h *AdminHandler) GetStats(c *gin.Context) {
 	var consultas int64
 	h.DB.Model(&models.Agendamento{}).Count(&consultas) // Total appointments
 
+	// Calculate New Patients this month
+	var newPatients int64
+	now := time.Now()
+	startOfMonth := time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, time.Local)
+	h.DB.Model(&models.Paciente{}).Where("created_at >= ?", startOfMonth).Count(&newPatients)
+
+	// Calculate Occupancy Rate (Current Month)
+	var consultasMes int64
+	h.DB.Model(&models.Agendamento{}).Where("data_hora_inicio >= ?", startOfMonth).Count(&consultasMes)
+	
+	// Calculate Occupancy Rate (Previous Month)
+	startOfPrevMonth := startOfMonth.AddDate(0, -1, 0)
+	var consultasMesAnterior int64
+	h.DB.Model(&models.Agendamento{}).Where("data_hora_inicio >= ? AND data_hora_inicio < ?", startOfPrevMonth, startOfMonth).Count(&consultasMesAnterior)
+
+	var occupancyRate int = 0
+	var prevOccupancyRate int = 0
+
+	if dentistas > 0 {
+		// Assume each dentist can do 8 appointments a day, 22 days a month = 176 appointments/month
+		capacidadeMensal := dentistas * 176
+		
+		occupancyRate = int((float64(consultasMes) / float64(capacidadeMensal)) * 100)
+		if occupancyRate > 100 {
+			occupancyRate = 100
+		}
+
+		prevOccupancyRate = int((float64(consultasMesAnterior) / float64(capacidadeMensal)) * 100)
+		if prevOccupancyRate > 100 {
+			prevOccupancyRate = 100
+		}
+	} else {
+	    if consultasMes > 0 {
+	        occupancyRate = 100
+	    }
+	    if consultasMesAnterior > 0 {
+	        prevOccupancyRate = 100
+	    }
+	}
+
+	occupancyDelta := occupancyRate - prevOccupancyRate
+
 	stats := gin.H{
-		"totalPacientes": pacientes,
-		"totalDentistas": dentistas,
-		"totalConsultas": consultas,
-		"ocupacao":       0, // Mock for now
-		"novosPacientes": 0, // Mock for now
+		"totalPacientes":   pacientes,
+		"totalDentistas":   dentistas,
+		"totalConsultas":   consultas,
+		"ocupacao":         occupancyRate, // Legacy key
+		"novosPacientes":   newPatients,   // Legacy key
+		"occupancyRate":    occupancyRate,
+		"occupancyDelta":   occupancyDelta,
+		"newPatientsCount": newPatients,
 	}
 
 	c.JSON(http.StatusOK, stats)

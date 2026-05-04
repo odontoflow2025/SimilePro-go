@@ -26,7 +26,7 @@ type Agendamento struct {
     Clinica        Clinica           `gorm:"foreignKey:ClinicaID" json:"clinica,omitempty"`
     DataHoraInicio time.Time         `json:"dataHoraInicio"`
     DataHoraFim    time.Time         `json:"dataHoraFim"`
-    Motivo         string            `json:"motivo"`
+    Motivo         string            `json:"motivoConsulta"`
     Status         StatusAgendamento `json:"status" gorm:"default:AGENDADO"`
     UsuarioCriacaoID uint            `json:"usuarioCriacaoId"`
     CreatedAt      time.Time         `json:"createdAt"`

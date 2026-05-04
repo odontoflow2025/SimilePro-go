@@ -47,7 +47,8 @@ func SetupRoutes(r *gin.Engine, db *gorm.DB, cfg *config.Config) {
         auth := api.Group("/auth")
         {
             auth.POST("/login", authHandler.Login)
-            auth.POST("/signup", authHandler.Register) // Changed from /register to match original
+            auth.POST("/logout", authHandler.Logout)
+            auth.POST("/signup", authHandler.Register)
         }
 
         // Webhooks (Unprotected by JWT, validated internally by signature)
@@ -55,6 +56,10 @@ func SetupRoutes(r *gin.Engine, db *gorm.DB, cfg *config.Config) {
         {
             webhooks.POST("/dock/payment", handlers.HandleDockWebhook(db))
         }
+
+        // Public Support Routes
+        ticketHandler := handlers.NewTicketHandler(db)
+        api.POST("/tickets", ticketHandler.CreateTicket)
 
         // Protected routes
         protected := api.Group("")
@@ -128,6 +133,8 @@ func SetupRoutes(r *gin.Engine, db *gorm.DB, cfg *config.Config) {
             {
                 agendamentos.POST("", agendamentoHandler.Create)
                 agendamentos.GET("", agendamentoHandler.FindAll)
+                agendamentos.GET("/:id", agendamentoHandler.FindOne)
+                agendamentos.PATCH("/:id", agendamentoHandler.Update)
                 agendamentos.PATCH("/:id/status", agendamentoHandler.UpdateStatus)
             }
 
@@ -226,11 +233,10 @@ func SetupRoutes(r *gin.Engine, db *gorm.DB, cfg *config.Config) {
             // Assinaturas (SaaS)
             assinaturaHandler := handlers.NewAssinaturaHandler(db)
             assinaturas := protected.Group("/assinaturas")
-            assinaturas.Use(middleware.RequireRole(db, "ADMIN_TOTAL"))
             {
                 assinaturas.GET("/planos", assinaturaHandler.GetPlanos)
                 assinaturas.GET("/status", assinaturaHandler.GetStatus)
-                assinaturas.POST("/", assinaturaHandler.Assinar)
+                assinaturas.POST("/", middleware.RequireRole(db, "ADMIN_TOTAL"), assinaturaHandler.Assinar)
             }
 
             protected.POST("/pacientes/:id/anamnese", anamneseHandler.CreateOrUpdate)

@@ -38,6 +38,7 @@ func Connect(cfg *config.Config) (*gorm.DB, error) {
         &models.Produto{}, &models.NotaFiscalEntrada{}, &models.ItemNF{}, &models.MovimentacaoEstoque{},
         &models.CompetenciaFolha{}, &models.Holerite{}, &models.EventoHolerite{}, 
         &models.NotaFiscalServico{}, &models.ImpostoGuia{}, &models.LancamentoContabil{},
+        &models.Ticket{},
     ); err != nil {
         log.Println("Warning: Auto-migration encountered an error (continuing):", err)
     }

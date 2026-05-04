@@ -129,12 +129,36 @@ func (h *AuthHandler) Login(c *gin.Context) {
     })
 
     tokenString, err := token.SignedString([]byte(h.JWTSecret))
-    if err != nil {
+    if (err != nil) {
         c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to generate token"})
         return
     }
 
-    c.JSON(http.StatusOK, gin.H{"token": tokenString})
+    // Set JWT as HttpOnly Cookie
+    // MaxAge in seconds (24h)
+    maxAge := 86400 
+    
+    // In production, Secure should be true. 
+    // Here we use false for local development compatibility unless otherwise configured.
+    c.SetCookie("auth_token", tokenString, maxAge, "/", "", false, true)
+
+    c.JSON(http.StatusOK, gin.H{
+        "token": tokenString, // Keep for legacy compatibility if needed
+        "message": "Login successful",
+    })
+}
+
+// Logout godoc
+// @Summary      Logout user
+// @Description  Clear the authentication cookie
+// @Tags         auth
+// @Produce      json
+// @Success      200    {object}  map[string]string
+// @Router       /auth/logout [post]
+func (h *AuthHandler) Logout(c *gin.Context) {
+	// Clear the cookie by setting maxAge to -1
+	c.SetCookie("auth_token", "", -1, "/", "", false, true)
+	c.JSON(http.StatusOK, gin.H{"message": "Logged out successfully"})
 }
 
 // Me godoc

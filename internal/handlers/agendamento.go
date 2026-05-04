@@ -26,6 +26,13 @@ type CreateAgendamentoInput struct {
     UsuarioCriacaoID uint      `json:"usuarioCriacaoId"`
 }
 
+type UpdateAgendamentoInput struct {
+    MotivoConsulta *string                   `json:"motivoConsulta"`
+    Status         *models.StatusAgendamento `json:"status"`
+    DataHoraInicio *time.Time                `json:"dataHoraInicio"`
+    DataHoraFim    *time.Time                `json:"dataHoraFim"`
+}
+
 type UpdateStatusInput struct {
     Status models.StatusAgendamento `json:"status" binding:"required"`
 }
@@ -156,6 +163,64 @@ func (h *AgendamentoHandler) FindOne(c *gin.Context) {
     }
 
     c.JSON(http.StatusOK, agendamento)
+}
+
+// Update godoc
+// @Summary      Update appointment
+// @Description  Update details of an appointment (e.g., MotivoConsulta, Status)
+// @Tags         agendamentos
+// @Accept       json
+// @Produce      json
+// @Security     BearerAuth
+// @Param        id     path      string             true  "Appointment ID"
+// @Param        input  body      UpdateAgendamentoInput  true  "Updated Fields"
+// @Success      200    {object}  models.Agendamento
+// @Router       /agendamentos/{id} [patch]
+func (h *AgendamentoHandler) Update(c *gin.Context) {
+	userClinicaID, err := getClinicaIDFromContext(c)
+	userRole := getUserRoleFromContext(c)
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Clinic not identified"})
+		return
+	}
+
+	id := c.Param("id")
+	var input UpdateAgendamentoInput
+	if err := c.ShouldBindJSON(&input); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	var agendamento models.Agendamento
+	if err := h.DB.First(&agendamento, id).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Agendamento not found"})
+		return
+	}
+
+	if userRole != "ADMIN_TOTAL" && agendamento.ClinicaID != userClinicaID {
+		c.JSON(http.StatusForbidden, gin.H{"error": "Acesso negado: este agendamento pertence a outra clínica"})
+		return
+	}
+
+	if input.MotivoConsulta != nil {
+		agendamento.Motivo = *input.MotivoConsulta
+	}
+	if input.Status != nil {
+		agendamento.Status = *input.Status
+	}
+	if input.DataHoraInicio != nil {
+		agendamento.DataHoraInicio = *input.DataHoraInicio
+	}
+	if input.DataHoraFim != nil {
+		agendamento.DataHoraFim = *input.DataHoraFim
+	}
+
+	if err := h.DB.Save(&agendamento).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update agendamento"})
+		return
+	}
+
+	c.JSON(http.StatusOK, agendamento)
 }
 
 // UpdateStatus godoc

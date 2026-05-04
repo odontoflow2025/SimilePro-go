@@ -14,16 +14,24 @@ import (
 
 func AuthMiddleware(jwtSecret string) gin.HandlerFunc {
     return func(c *gin.Context) {
+        var tokenString string
+        
+        // 1. Try to get from Authorization Header
         authHeader := c.GetHeader("Authorization")
-        if authHeader == "" {
-            c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "Authorization header is required"})
-            return
-        }
-
-        tokenString := strings.TrimPrefix(authHeader, "Bearer ")
-        if tokenString == authHeader {
-            c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "Bearer token format is required"})
-            return
+        if authHeader != "" {
+            tokenString = strings.TrimPrefix(authHeader, "Bearer ")
+            if tokenString == authHeader {
+                c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "Bearer token format is required"})
+                return
+            }
+        } else {
+            // 2. Try to get from HttpOnly Cookie
+            cookie, err := c.Cookie("auth_token")
+            if err != nil {
+                c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "Authentication required (missing header or cookie)"})
+                return
+            }
+            tokenString = cookie
         }
 
         token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {

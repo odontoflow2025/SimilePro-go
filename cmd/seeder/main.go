@@ -49,12 +49,15 @@ func main() {
 				log.Fatalf("Failed to create user: %v", err)
 			}
 
+			expiracao := time.Date(2100, 1, 1, 0, 0, 0, 0, time.Local)
 			clinica = models.Clinica{
 				NomeFantasia:    "Odonto Pró",
 				RazaoSocial:     "Odonto Pró Ltda",
 				CNPJ:            "00.000.000/0001-00",
 				ResponsavelID:   user.ID,
-				Plano:           "PRO",
+				Plano:           "PREMIUM",
+				PlanoExpiracao:  &expiracao,
+				PlanoStatus:     "ACTIVE",
 				MaxFuncionarios: 9999,
 			}
 			if err := db.Create(&clinica).Error; err != nil {
@@ -66,8 +69,11 @@ func main() {
 	} else {
 		log.Printf("Found Clinica: %s (ID: %d)", clinica.NomeFantasia, clinica.ID)
 		// Update plan just in case
+		expiracao := time.Date(2100, 1, 1, 0, 0, 0, 0, time.Local)
 		db.Model(&clinica).Updates(map[string]interface{}{
-			"plano": "PRO", 
+			"plano":            "PREMIUM", 
+			"plano_expiracao":  &expiracao,
+			"plano_status":     "ACTIVE",
 			"max_funcionarios": 9999,
 		})
 	}

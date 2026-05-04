@@ -19,7 +19,10 @@ type Clinica struct {
     Matriz               *Clinica       `gorm:"foreignKey:MatrizID" json:"matriz,omitempty"`
     RndsAtivo            bool           `json:"rndsAtivo" gorm:"default:false"`
     RndsCnes             string         `json:"rndsCnes"`
-    Plano                string         `json:"plano" gorm:"default:'FREE'"` // FREE, BASE, PRO, EDUCACIONAL
+    Plano                string         `json:"plano" gorm:"default:'FREE'"` // FREE, BASE, PREMIUM, EDUCACIONAL
+    PlanoExpiracao       *time.Time     `json:"planoExpiracao"`
+    PlanoStatus          string         `json:"planoStatus" gorm:"default:'ACTIVE'"` // ACTIVE, EXPIRED, CANCELED
+    PlanoUltimoPagamento *time.Time     `json:"planoUltimoPagamento"`
     MaxFuncionarios      int            `json:"maxFuncionarios" gorm:"default:2"`
     RndsCertificado      string         `json:"-"` // Don't expose certificate in JSON
     RndsSenhaCertificado string         `json:"-"` // Don't expose password

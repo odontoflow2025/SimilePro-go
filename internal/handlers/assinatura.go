@@ -96,9 +96,11 @@ func (h *AssinaturaHandler) GetStatus(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{
-		"clinicaId": clinica.ID,
-		"plano":     clinica.Plano,
-		"status":    "ATIVO", // Simplified
+		"clinicaId":       clinica.ID,
+		"plano":           clinica.Plano,
+		"status":          clinica.PlanoStatus,
+		"planoExpiracao":  clinica.PlanoExpiracao,
+		"isActive":        h.Service.IsActive(&clinica),
 	})
 }
 
@@ -110,7 +112,7 @@ func (h *AssinaturaHandler) GetStatus(c *gin.Context) {
 // @Accept       json
 // @Produce      json
 // @Security     BearerAuth
-// @Param        input  body      object  true  "New Plan ID"
+// @Param        input  body      object  true  "New Plan ID and Periodivity"
 // @Success      200    {object}  map[string]string
 // @Router       /assinatura/assinar [post]
 func (h *AssinaturaHandler) Assinar(c *gin.Context) {
@@ -121,14 +123,30 @@ func (h *AssinaturaHandler) Assinar(c *gin.Context) {
 	}
 
 	var input struct {
-		Plano string `json:"plano" binding:"required"`
+		Plano         string `json:"plano" binding:"required"`
+		Periodicidade string `json:"periodicidade"` // MENSAL or ANUAL
 	}
 	if err := c.ShouldBindJSON(&input); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 
-	if err := h.Service.UpdatePlan(userClinicaIDVal.(uint), input.Plano); err != nil {
+    // Default to MENSAL if not provided
+    if input.Periodicidade == "" {
+        input.Periodicidade = "MENSAL"
+    }
+
+    var clinicaID uint
+	switch v := userClinicaIDVal.(type) {
+	case float64:
+		clinicaID = uint(v)
+	case uint:
+		clinicaID = v
+	case int:
+		clinicaID = uint(v)
+	}
+
+	if err := h.Service.UpdatePlan(clinicaID, input.Plano, input.Periodicidade); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
