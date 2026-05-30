@@ -141,22 +141,19 @@ func (h *PlanoTratamentoHandler) FindAll(c *gin.Context) {
 // @Failure      404  {object}  map[string]string
 // @Router       /planos-tratamento/{id} [get]
 func (h *PlanoTratamentoHandler) FindOne(c *gin.Context) {
-	userClinicaID, err := getClinicaIDFromContext(c)
-	userRole := getUserRoleFromContext(c)
-	if err != nil {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "Clinic not identified"})
+	tenantDBRaw, exists := c.Get("tenantDB")
+	if !exists {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database context missing"})
 		return
 	}
+	tenantDB := tenantDBRaw.(*gorm.DB)
 
 	id := c.Param("id")
 	var plano models.PlanoTratamento
-	if err := h.DB.Preload("Paciente").Preload("Dentista").Preload("Itens").Preload("Itens.Procedimento").First(&plano, id).Error; err != nil {
+	
+	// TenantDB already includes the clinica_id filter for non-admins
+	if err := tenantDB.Preload("Paciente").Preload("Dentista").Preload("Itens").Preload("Itens.Procedimento").First(&plano, id).Error; err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Plano not found"})
-		return
-	}
-
-	if userRole != "ADMIN_TOTAL" && plano.ClinicaID != userClinicaID {
-		c.JSON(http.StatusForbidden, gin.H{"error": "Não autorizado a acessar plano de outra clínica"})
 		return
 	}
 
@@ -175,12 +172,12 @@ func (h *PlanoTratamentoHandler) FindOne(c *gin.Context) {
 // @Success      200    {object}  models.PlanoTratamento
 // @Router       /planos-tratamento/{id}/status [patch]
 func (h *PlanoTratamentoHandler) UpdateStatus(c *gin.Context) {
-	userClinicaID, err := getClinicaIDFromContext(c)
-	userRole := getUserRoleFromContext(c)
-	if err != nil {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "Clinic not identified"})
+	tenantDBRaw, exists := c.Get("tenantDB")
+	if !exists {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database context missing"})
 		return
 	}
+	tenantDB := tenantDBRaw.(*gorm.DB)
 
 	id := c.Param("id")
 	var input UpdateStatusPlanoInput
@@ -190,21 +187,30 @@ func (h *PlanoTratamentoHandler) UpdateStatus(c *gin.Context) {
 	}
 
 	var plano models.PlanoTratamento
-	if err := h.DB.First(&plano, id).Error; err != nil {
+	if err := tenantDB.First(&plano, id).Error; err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Plano not found"})
 		return
 	}
 
-	if userRole != "ADMIN_TOTAL" && plano.ClinicaID != userClinicaID {
-		c.JSON(http.StatusForbidden, gin.H{"error": "Não autorizado a modificar plano de outra clínica"})
-		return
-	}
+	// Optimistic Locking Update
+	result := tenantDB.Model(&plano).
+		Where("version = ?", plano.Version).
+		Updates(map[string]interface{}{
+			"status":  input.Status,
+			"version": plano.Version + 1,
+		})
 
-	plano.Status = input.Status
-	if err := h.DB.Save(&plano).Error; err != nil {
+	if result.Error != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update status"})
 		return
 	}
 
+	if result.RowsAffected == 0 {
+		c.JSON(http.StatusConflict, gin.H{"error": "O registro foi modificado por outro usuário simultaneamente. Recarregue a página."})
+		return
+	}
+
+	// Reload to get updated version
+	tenantDB.First(&plano, id)
 	c.JSON(http.StatusOK, plano)
 }

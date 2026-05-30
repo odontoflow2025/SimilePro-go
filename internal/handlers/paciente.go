@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net/http"
 	"odonto-flow-go/internal/models"
+	"odonto-flow-go/internal/utils"
 	"strconv"
 	"time"
 
@@ -93,22 +94,23 @@ func (h *PacienteHandler) Create(c *gin.Context) {
 // @Success      200        {array}   models.Paciente
 // @Router       /pacientes [get]
 func (h *PacienteHandler) FindAll(c *gin.Context) {
-	clinicaID := c.Query("clinicaId")
 	search := c.Query("search") // Can be CPF or CodigoUnico
 
-	userClinicaID, _ := c.Get("clinicaID")
+	tenantDBRaw, exists := c.Get("tenantDB")
+	var query *gorm.DB
+	if exists {
+		query = tenantDBRaw.(*gorm.DB)
+	} else {
+		userClinicaID, _ := c.Get("clinicaID")
+		query = h.DB.Where("clinica_id = ?", userClinicaID)
+	}
 
 	var pacientes []models.Paciente
-	query := h.DB
 
 	if search != "" {
-		// Global search by CPF or Unique Code
-		query = query.Where("cpf = ? OR codigo_unico = ?", search, search)
-	} else if clinicaID != "" {
-		query = query.Where("clinica_id = ?", clinicaID)
-	} else {
-		// Default to user's clinic if no search/filter provided
-		query = query.Where("clinica_id = ?", userClinicaID)
+		// Converter a pesquisa em Hash se for CPF
+		searchHash, _ := utils.HashDeterministic(search)
+		query = query.Where("cpf_hash = ? OR codigo_unico = ?", searchHash, search)
 	}
 
 	if err := query.Find(&pacientes).Error; err != nil {
@@ -116,95 +118,38 @@ func (h *PacienteHandler) FindAll(c *gin.Context) {
 		return
 	}
 
-	// Apply privacy filter to the results if search was used outside own clinic
-	var response []interface{}
-	for _, p := range pacientes {
-		if userClinicaID != nil && p.ClinicaID == userClinicaID.(uint) {
-			response = append(response, p)
-		} else {
-			// Restricted view for cross-clinic search results
-			response = append(response, gin.H{
-				"id":           p.ID,
-				"codigoUnico":  p.CodigoUnico,
-				"nome":         p.Nome,
-				"genero":       p.Genero,
-				"_privacidade": "ACESSO_RESTRITO",
-			})
-		}
-	}
-
-	c.JSON(http.StatusOK, response)
+	c.JSON(http.StatusOK, pacientes)
 }
 
 // FindOne godoc
 // @Summary      Get patient details
-// @Description  Get full details of a patient. If outside clinic, requires valid protocol.
+// @Description  Get full details of a patient. Restricts by TenantDB.
 // @Tags         pacientes
 // @Produce      json
 // @Security     BearerAuth
 // @Param        id         path      string  true   "Patient ID"
-// @Param        protocolo  query     string  false  "Audit Protocol for sensitive data"
 // @Success      200        {object}  models.Paciente
 // @Failure      404        {object}  map[string]string
 // @Router       /pacientes/{id} [get]
 func (h *PacienteHandler) FindOne(c *gin.Context) {
 	id := c.Param("id")
+	
+	tenantDBRaw, exists := c.Get("tenantDB")
+	var query *gorm.DB
+	if exists {
+		query = tenantDBRaw.(*gorm.DB)
+	} else {
+		userClinicaID, _ := c.Get("clinicaID")
+		query = h.DB.Where("clinica_id = ?", userClinicaID)
+	}
+
 	var paciente models.Paciente
-	if err := h.DB.Preload("Clinica").First(&paciente, id).Error; err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "Paciente not found"})
+	if err := query.Preload("Clinica").First(&paciente, id).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Paciente não encontrado"})
 		return
 	}
 
-	// Privacy Logic
-	userClinicaID, _ := c.Get("clinicaID")
-	userID, _ := c.Get("userID")
-	protocolo := c.Query("protocolo")
-
-	hasFullAccess := false
-
-	// 1. Same Clinic?
-	if userClinicaID != nil && paciente.ClinicaID == userClinicaID.(uint) {
-		hasFullAccess = true
-	}
-
-	// 2. Protocol provided/valid?
-	if !hasFullAccess && protocolo != "" {
-		var acesso models.AcessoProntuario
-		err := h.DB.Where("paciente_id = ? AND usuario_id = ? AND numero_protocolo = ? AND expiracao > ?",
-			paciente.ID, userID, protocolo, time.Now()).First(&acesso).Error
-		if err == nil {
-			hasFullAccess = true
-		}
-	}
-
-	if hasFullAccess {
-		c.JSON(http.StatusOK, paciente)
-		return
-	}
-
-	// Restricted Access (Nível 1) - Only Basic Info + Alertas
-	// We return a limited version of the object
-	var alertas []models.Alerta
-	h.DB.Where("paciente_id = ?", paciente.ID).Find(&alertas)
-
-	// Filter alerts to only critical ones (as requested: Cancer, Diabetes, Pressure, Allergies)
-	// Red (GRAVISSIMO) and Orange (GRAVE) are usually the critical ones
-	var alertasCriticos []models.Alerta
-	for _, a := range alertas {
-		if a.Nivel == "GRAVISSIMO" || a.Nivel == "GRAVE" {
-			alertasCriticos = append(alertasCriticos, a)
-		}
-	}
-
-	c.JSON(http.StatusOK, gin.H{
-		"id":           paciente.ID,
-		"codigoUnico":  paciente.CodigoUnico,
-		"nome":         paciente.Nome,
-		"genero":       paciente.Genero,
-		"alertasAviso": alertasCriticos,
-		"_privacidade": "ACESSO_RESTRITO",
-		"_mensagem":    "Histórico completo bloqueado. Requer protocolo de auditoria.",
-	})
+	c.JSON(http.StatusOK, paciente)
 }
 
 // GerarProtocolo godoc

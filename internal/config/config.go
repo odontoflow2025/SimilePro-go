@@ -10,9 +10,11 @@ type Config struct {
     DBUser     string `mapstructure:"DB_USER"`
     DBPassword string `mapstructure:"DB_PASSWORD"`
     DBName     string `mapstructure:"DB_NAME"`
-    ServerPort string `mapstructure:"SERVER_PORT"`
-    JWTSecret  string `mapstructure:"JWT_SECRET"`
-    DBSSLMode  string `mapstructure:"DB_SSL_MODE"`
+    ServerPort    string `mapstructure:"SERVER_PORT"`
+    JWTSecret     string `mapstructure:"JWT_SECRET"`
+    DBSSLMode     string `mapstructure:"DB_SSL_MODE"`
+	EncryptionKey string `mapstructure:"ENCRYPTION_KEY"`
+	RedisAddr     string `mapstructure:"REDIS_ADDR"`
 }
 
 func LoadConfig() (*Config, error) {
@@ -22,6 +24,8 @@ func LoadConfig() (*Config, error) {
     if err := viper.ReadInConfig(); err != nil {
         // It's okay if .env doesn't exist, we might be using system env vars
     }
+
+    viper.BindEnv("REDIS_ADDR")
 
     var config Config
     if err := viper.Unmarshal(&config); err != nil {

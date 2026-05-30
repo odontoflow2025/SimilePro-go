@@ -13,6 +13,33 @@ import (
 	"gorm.io/gorm"
 )
 
+func sanitizePayload(data interface{}) interface{} {
+	blocklist := map[string]bool{
+		"senha": true, "password": true, "cpf": true,
+		"historicoMedico": true, "alergias": true, "observacoes": true, "medicamentos": true,
+	}
+
+	switch v := data.(type) {
+	case map[string]interface{}:
+		sanitized := make(map[string]interface{})
+		for key, val := range v {
+			if blocklist[key] {
+				sanitized[key] = "[CENSURADO - PII/PHI]"
+			} else {
+				sanitized[key] = sanitizePayload(val)
+			}
+		}
+		return sanitized
+	case []interface{}:
+		sanitizedList := make([]interface{}, len(v))
+		for i, val := range v {
+			sanitizedList[i] = sanitizePayload(val)
+		}
+		return sanitizedList
+	}
+	return data
+}
+
 func AuditMiddleware(db *gorm.DB) gin.HandlerFunc {
 	auditService := services.NewAuditService(db)
 
@@ -94,7 +121,10 @@ func AuditMiddleware(db *gorm.DB) gin.HandlerFunc {
 		// Parse Body for JSON log
 		var dados interface{}
 		if len(bodyBytes) > 0 {
-			_ = json.Unmarshal(bodyBytes, &dados)
+			var parsedData interface{}
+			if err := json.Unmarshal(bodyBytes, &parsedData); err == nil {
+				dados = sanitizePayload(parsedData)
+			}
 		}
 
 		// Log it

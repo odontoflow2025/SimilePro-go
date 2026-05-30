@@ -1,6 +1,7 @@
 package models
 
 import (
+	"odonto-flow-go/internal/utils"
 	"time"
 
 	"gorm.io/gorm"
@@ -16,7 +17,64 @@ type Anamnese struct {
     Fumante         bool        `json:"fumante"`
     Gestante        bool        `json:"gestante"`
     Observacoes     string      `gorm:"type:text" json:"observacoes"`
-    CreatedAt       time.Time      `json:"createdAt"`
-    UpdatedAt       time.Time      `json:"updatedAt"`
-    DeletedAt       gorm.DeletedAt `gorm:"index" json:"-"`
+	CreatedAt       time.Time      `json:"createdAt"`
+	UpdatedAt       time.Time      `json:"updatedAt"`
+	DeletedAt       gorm.DeletedAt `gorm:"index" json:"-"`
 }
+
+func (a *Anamnese) BeforeSave(tx *gorm.DB) (err error) {
+	if a.Observacoes != "" {
+		a.Observacoes, err = utils.EncryptAESGCM(a.Observacoes)
+		if err != nil {
+			return err
+		}
+	}
+	if a.HistoricoMedico != "" {
+		a.HistoricoMedico, err = utils.EncryptAESGCM(a.HistoricoMedico)
+		if err != nil {
+			return err
+		}
+	}
+	if a.Alergias != "" {
+		a.Alergias, err = utils.EncryptAESGCM(a.Alergias)
+		if err != nil {
+			return err
+		}
+	}
+	if a.Medicamentos != "" {
+		a.Medicamentos, err = utils.EncryptAESGCM(a.Medicamentos)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (a *Anamnese) AfterFind(tx *gorm.DB) (err error) {
+	if a.Observacoes != "" {
+		a.Observacoes, err = utils.DecryptAESGCM(a.Observacoes)
+		if err != nil {
+			return err
+		}
+	}
+	if a.HistoricoMedico != "" {
+		a.HistoricoMedico, err = utils.DecryptAESGCM(a.HistoricoMedico)
+		if err != nil {
+			return err
+		}
+	}
+	if a.Alergias != "" {
+		a.Alergias, err = utils.DecryptAESGCM(a.Alergias)
+		if err != nil {
+			return err
+		}
+	}
+	if a.Medicamentos != "" {
+		a.Medicamentos, err = utils.DecryptAESGCM(a.Medicamentos)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+

@@ -38,6 +38,7 @@ func SetupRoutes(r *gin.Engine, db *gorm.DB, cfg *config.Config) {
     estoqueHandler := handlers.NewEstoqueHandler(db)
     usuarioHandler := handlers.NewUsuarioHandler(db)
     fiscalHandler := handlers.NewFiscalHandler(db)
+    rhFinanceiroHandler := handlers.NewRHFinanceiroHandler(db)
 
     // Routes
     api := r.Group("/api")
@@ -46,7 +47,7 @@ func SetupRoutes(r *gin.Engine, db *gorm.DB, cfg *config.Config) {
         api.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerFiles.Handler))
         auth := api.Group("/auth")
         {
-            auth.POST("/login", authHandler.Login)
+            auth.POST("/login", middleware.LoginRateLimiter(), authHandler.Login)
             auth.POST("/logout", authHandler.Logout)
             auth.POST("/signup", authHandler.Register)
         }
@@ -63,7 +64,14 @@ func SetupRoutes(r *gin.Engine, db *gorm.DB, cfg *config.Config) {
 
         // Protected routes
         protected := api.Group("")
-        protected.Use(middleware.AuthMiddleware(cfg.JWTSecret))
+        
+        // 1. Instancia o AuthProvider UMA VEZ lendo do disco
+        authProvider := middleware.NewAuthProvider("public.pem")
+        
+        // 2. Injeta o middleware baseado em memória
+        protected.Use(authProvider.AuthMiddleware())
+        
+        protected.Use(middleware.TenantDBMiddleware(db)) // Add Tenant Isolation Middleware
         protected.Use(middleware.AuditMiddleware(db)) // Add Audit Middleware
         {
             clinicas := protected.Group("/clinicas")
@@ -112,11 +120,16 @@ func SetupRoutes(r *gin.Engine, db *gorm.DB, cfg *config.Config) {
             {
                 rh.POST("/folha/processar", folhaHandler.ProcessarFolha)
                 rh.GET("/folha", folhaHandler.GetHolerites)
+                
+                // Gestão Dinâmica de Rubricas
+                rh.GET("/rubricas", folhaHandler.GetRubricas)
+                rh.POST("/rubricas", folhaHandler.CreateRubrica)
             }
 
             usuarios := protected.Group("/usuarios")
-            usuarios.Use(middleware.RequireRole(db, "ADMIN_TOTAL"))
+            usuarios.Use(middleware.RequireRole(db, "ADMIN_TOTAL", "ADMIN_GERENCIAL", "RH"))
             {
+                usuarios.POST("", usuarioHandler.Create)
                 usuarios.GET("", usuarioHandler.FindAll)
                 usuarios.PATCH("/:id", usuarioHandler.Update)
                 usuarios.DELETE("/:id", usuarioHandler.Delete)
@@ -136,6 +149,29 @@ func SetupRoutes(r *gin.Engine, db *gorm.DB, cfg *config.Config) {
                 agendamentos.GET("/:id", agendamentoHandler.FindOne)
                 agendamentos.PATCH("/:id", agendamentoHandler.Update)
                 agendamentos.PATCH("/:id/status", agendamentoHandler.UpdateStatus)
+                agendamentos.DELETE("/:id", agendamentoHandler.Delete)
+            }
+
+            v1 := protected.Group("/v1")
+            {
+                v1.GET("/profissionais", dentistaHandler.GetProfissionaisAgenda)
+                v1.GET("/agendamentos", middleware.RequireRole(db, "ADMIN_TOTAL", "ADMIN_GERENCIAL", "DENTISTA", "RECEPCIONISTA", "ASSISTENTE"), agendamentoHandler.FindAll)
+
+                // Perimeter RH - Strict RBAC
+                rh := v1.Group("/rh")
+                rh.Use(middleware.AdminAuthMiddleware("ADMIN", "RH"))
+                {
+                    rh.POST("/funcionario", rhFinanceiroHandler.SaveFuncionario)
+                    rh.POST("/folha/ajuste", rhFinanceiroHandler.AplicarAjusteManual)
+                    rh.GET("/folha/exportar/:holerite_id", rhFinanceiroHandler.ExportarHolerite)
+                }
+
+                // Perimeter Financeiro - Strict RBAC
+                fin := v1.Group("/financeiro")
+                fin.Use(middleware.AdminAuthMiddleware("ADMIN", "FINANCEIRO", "RH"))
+                {
+                    fin.POST("/folha/fechamento", rhFinanceiroHandler.FecharFolhaEFiscal)
+                }
             }
 
             planos := protected.Group("/planos-tratamento")

@@ -62,3 +62,18 @@ type LancamentoContabil struct {
 	UpdatedAt     time.Time      `json:"updatedAt"`
 	DeletedAt     gorm.DeletedAt `gorm:"index" json:"-"`
 }
+
+// BalancoFinanceiroTenant registra históricos consolidados de tributos e provisões
+type BalancoFinanceiroTenant struct {
+	ID           uint      `gorm:"primaryKey" json:"id"`
+	ClinicaID    uint      `gorm:"not null;index" json:"clinicaId"`
+	Mes          int       `gorm:"not null" json:"mes"`
+	Ano          int       `gorm:"not null" json:"ano"`
+	Tipo         string    `gorm:"not null" json:"tipo"`      // EX: "TRIBUTO_INSS", "FOLHA_PAGAMENTO", "ISS"
+	Descricao    string    `json:"descricao"`
+	Valor        int64     `json:"valor"`                     // Armazenado em centavos para precisão
+	ReferenciaID uint      `json:"referenciaId"`              // ID da Holerite ou Guia Fiscal
+	Status       string    `gorm:"default:'PENDENTE'" json:"status"` // PENDENTE, PAGO
+	DataVencimento *time.Time `json:"dataVencimento"`
+	CreatedAt    time.Time `json:"createdAt"`
+}

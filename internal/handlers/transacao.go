@@ -1,12 +1,14 @@
 package handlers
 
 import (
+	"fmt"
 	"net/http"
 	"odonto-flow-go/internal/models"
 	"time"
 
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 )
 
 type TransacaoHandler struct {
@@ -159,32 +161,45 @@ func (h *TransacaoHandler) UpdateStatus(c *gin.Context) {
 		return
 	}
 
-	var transacao models.Transacao
-	if err := h.DB.First(&transacao, id).Error; err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "Transacao not found"})
+	err = h.DB.Transaction(func(tx *gorm.DB) error {
+		var transacao models.Transacao
+		
+		// Pessimistic Locking: SELECT FOR UPDATE
+		// Bloqueia a linha no banco até o fim da transação para evitar double-spending
+		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).First(&transacao, id).Error; err != nil {
+			return err
+		}
+
+		// Ownership check
+		if userRole != "ADMIN_TOTAL" && transacao.ClinicaID != userClinicaID {
+			return fmt.Errorf("Não autorizado a modificar transação de outra clínica")
+		}
+
+		transacao.Status = input.Status
+		if input.DataPagamento != nil {
+			transacao.DataPagamento = input.DataPagamento
+		} else if input.Status == models.StatusTransacaoPago && transacao.DataPagamento == nil {
+			now := time.Now()
+			transacao.DataPagamento = &now
+		}
+
+		return tx.Save(&transacao).Error
+	})
+
+	if err != nil {
+		if err.Error() == "Não autorizado a modificar transação de outra clínica" {
+			c.JSON(http.StatusForbidden, gin.H{"error": err.Error()})
+		} else {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update status"})
+		}
 		return
 	}
 
-	// Ownership check
-	if userRole != "ADMIN_TOTAL" && transacao.ClinicaID != userClinicaID {
-		c.JSON(http.StatusForbidden, gin.H{"error": "Não autorizado a modificar transação de outra clínica"})
-		return
-	}
+	// Como a transação terminou e a struct transacao local do closure foi destruída, precisamos buscar para retornar
+	var updatedTransacao models.Transacao
+	h.DB.First(&updatedTransacao, id)
 
-	transacao.Status = input.Status
-	if input.DataPagamento != nil {
-		transacao.DataPagamento = input.DataPagamento
-	} else if input.Status == models.StatusTransacaoPago && transacao.DataPagamento == nil {
-		now := time.Now()
-		transacao.DataPagamento = &now
-	}
-
-	if err := h.DB.Save(&transacao).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update status"})
-		return
-	}
-
-	c.JSON(http.StatusOK, transacao)
+	c.JSON(http.StatusOK, updatedTransacao)
 }
 
 

@@ -26,6 +26,7 @@ type PlanoTratamento struct {
     Status      StatusPlano       `json:"status" gorm:"default:ORCAMENTO"`
     ValorTotal  float64           `json:"valorTotal"`
     Itens       []ItemPlano       `gorm:"foreignKey:PlanoTratamentoID" json:"itens,omitempty"`
+    Version     uint              `gorm:"default:1" json:"-"`
     CreatedAt   time.Time         `json:"createdAt"`
     UpdatedAt   time.Time         `json:"updatedAt"`
     DeletedAt   gorm.DeletedAt    `gorm:"index" json:"-"`

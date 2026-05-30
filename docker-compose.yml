@@ -1,0 +1,62 @@
+version: '3.8'
+
+services:
+  redis:
+    image: redis:7-alpine
+    container_name: odontoflow_redis
+    networks:
+      - odontoflow_shared
+    restart: always
+
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: odontoflow_backend
+    environment:
+      ENV: development
+      REDIS_ADDR: odontoflow_redis:6379
+    volumes:
+    - ./.env:/app/.env
+    depends_on:
+      - redis
+      - postgres_db # Garante que o Go só liga DEPOIS que o Postgres estiver pronto
+    networks:
+      - odontoflow_shared
+    restart: always
+
+  cloudflare_tunnel:
+    image: cloudflare/cloudflared:latest
+    container_name: odontoflow_tunnel
+    restart: always
+    environment:
+      - TUNNEL_TOKEN=${CLOUDFLARE_TUNNEL_TOKEN}
+    command: tunnel run
+    depends_on:
+      - backend
+    networks:
+      - odontoflow_shared
+
+  postgres_db:
+    image: postgres:15-alpine
+    container_name: odontoflow_postgres
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: root
+      POSTGRES_DB: OdontoFlow
+    ports:
+      - "5432:5432" # Expõe para você conseguir olhar o banco pelo DBeaver/PgAdmin se quiser
+    volumes:
+      - postgres_data:/var/lib/postgresql/data # <--- ISSO GARANTE QUE OS DADOS NÃO SUMAM
+    networks:
+      - odontoflow_shared
+    restart: always
+
+volumes:
+  postgres_data:
+    driver: local
+
+networks:
+  odontoflow_shared:
+    external:
+      name: odontoflow_global_net

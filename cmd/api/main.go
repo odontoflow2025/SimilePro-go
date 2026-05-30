@@ -34,14 +34,24 @@ func main() {
         log.Fatalf("Failed to load configuration: %v", err)
     }
 
+	// Security: Fail-fast if encryption key is not strictly 32 bytes (AES-256)
+	if len(cfg.EncryptionKey) != 32 {
+		log.Fatalf("CRITICAL SECURITY ERROR: ENCRYPTION_KEY must be exactly 32 bytes for AES-256. Found %d bytes. System halted.", len(cfg.EncryptionKey))
+	}
+
     // Connect to database
     db, err := database.Connect(cfg)
     if err != nil {
         log.Fatalf("Failed to connect to database: %v", err)
     }
 
+    // Connect to Redis
+    database.ConnectRedis(cfg.RedisAddr)
+
     // Initialize Router
     r := gin.Default()
+    // Aceitar IP do container Docker proxy/Cloudflared para RateLimiting e Auditoria
+    r.SetTrustedProxies(nil)
 
     // Setup Routes
     routes.SetupRoutes(r, db, cfg)

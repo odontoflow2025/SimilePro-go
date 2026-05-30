@@ -3,6 +3,7 @@ package handlers
 import (
 	"net/http"
 	"odonto-flow-go/internal/models"
+	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -60,6 +61,15 @@ func (h *AgendamentoHandler) Create(c *gin.Context) {
 		return
 	}
 
+	userIDVal, _ := c.Get("userID")
+	var userID uint
+	if userIDVal != nil {
+		userID = userIDVal.(uint)
+	} else {
+		// Fallback se não vier do token, usa o que vier do payload
+		userID = input.UsuarioCriacaoID
+	}
+
 	// TODO: Validate time conflicts
 
 	agendamento := models.Agendamento{
@@ -69,7 +79,7 @@ func (h *AgendamentoHandler) Create(c *gin.Context) {
 		DataHoraInicio:   input.DataHoraInicio,
 		DataHoraFim:      input.DataHoraFim,
 		Motivo:           input.Motivo,
-		UsuarioCriacaoID: input.UsuarioCriacaoID,
+		UsuarioCriacaoID: userID,
 		Status:           models.StatusAgendamentoAgendado,
 	}
 
@@ -104,6 +114,7 @@ func (h *AgendamentoHandler) FindAll(c *gin.Context) {
 	dataInicio := c.Query("dataInicio")
 	dataFim := c.Query("dataFim")
 	dentistaID := c.Query("dentistaId")
+	profissionaisIDsStr := c.Query("profissionais_ids")
 
 	var agendamentos []models.Agendamento
 	query := h.DB.Preload("Paciente").Preload("Dentista").Preload("Dentista.Usuario")
@@ -114,7 +125,10 @@ func (h *AgendamentoHandler) FindAll(c *gin.Context) {
 		query = query.Where("clinica_id = ?", userClinicaID)
 	}
 
-	if dentistaID != "" {
+	if profissionaisIDsStr != "" {
+		ids := strings.Split(profissionaisIDsStr, ",")
+		query = query.Where("dentista_id IN ?", ids)
+	} else if dentistaID != "" {
 		query = query.Where("dentista_id = ?", dentistaID)
 	}
 	if dataInicio != "" {
@@ -267,4 +281,43 @@ func (h *AgendamentoHandler) UpdateStatus(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, agendamento)
+}
+
+// Delete godoc
+// @Summary      Delete appointment
+// @Description  Delete an appointment from the schedule
+// @Tags         agendamentos
+// @Accept       json
+// @Produce      json
+// @Security     BearerAuth
+// @Param        id     path      string             true  "Appointment ID"
+// @Success      204    "No Content"
+// @Router       /agendamentos/{id} [delete]
+func (h *AgendamentoHandler) Delete(c *gin.Context) {
+	userClinicaID, err := getClinicaIDFromContext(c)
+	userRole := getUserRoleFromContext(c)
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Clinic not identified"})
+		return
+	}
+
+	id := c.Param("id")
+
+	var agendamento models.Agendamento
+	if err := h.DB.First(&agendamento, id).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Agendamento not found"})
+		return
+	}
+
+	if userRole != "ADMIN_TOTAL" && agendamento.ClinicaID != userClinicaID {
+		c.JSON(http.StatusForbidden, gin.H{"error": "Acesso negado: este agendamento pertence a outra clínica"})
+		return
+	}
+
+	if err := h.DB.Delete(&agendamento).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to delete agendamento"})
+		return
+	}
+
+	c.Status(http.StatusNoContent)
 }

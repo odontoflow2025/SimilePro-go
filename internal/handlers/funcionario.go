@@ -23,6 +23,14 @@ type CreateFuncionarioInput struct {
     Cargo        string    `json:"cargo" binding:"required"`
     DataAdmissao time.Time `json:"dataAdmissao"`
     Salario      float64   `json:"salario"`
+    PIS          string    `json:"pis"`
+    CTPS         string    `json:"ctps"`
+    RG           string    `json:"rg"`
+    CNPJ         string    `json:"cnpj"`
+    Endereco     string    `json:"endereco"`
+    DadosBanco   string    `json:"dadosBanco"`
+    CargaHoraria int       `json:"cargaHoraria"`
+    Dependentes  int       `json:"dependentes"`
 }
 
 // Create godoc
@@ -54,6 +62,14 @@ func (h *FuncionarioHandler) Create(c *gin.Context) {
 		Cargo:        input.Cargo,
 		DataAdmissao: input.DataAdmissao,
 		Salario:      input.Salario,
+        PIS:          input.PIS,
+        CTPS:         input.CTPS,
+        RG:           input.RG,
+        CNPJ:         input.CNPJ,
+        Endereco:     input.Endereco,
+        DadosBanco:   input.DadosBanco,
+        CargaHoraria: input.CargaHoraria,
+        Dependentes:  input.Dependentes,
 	}
 
 	if err := h.DB.Create(&funcionario).Error; err != nil {

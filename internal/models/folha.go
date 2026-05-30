@@ -18,10 +18,24 @@ const (
 	TipoEventoDesconto TipoEventoFolha = "DESCONTO"
 )
 
+// RubricaFolha define os tipos de proventos e descontos dinâmicos com regras de incidência
+type RubricaFolha struct {
+	ID         uint            `gorm:"primaryKey" json:"id"`
+	ClinicaID  uint            `gorm:"not null;index" json:"clinicaId"`
+	Descricao  string          `gorm:"not null" json:"descricao"` // Ex: "Salário Base", "Comissão", "INSS"
+	Tipo       TipoEventoFolha `gorm:"not null" json:"tipo"`      // PROVENTO / DESCONTO
+	IncideINSS bool            `json:"incideInss"`
+	IncideFGTS bool            `json:"incideFgts"`
+	IncideIRRF bool            `json:"incideIrrf"`
+	Ativa      bool            `gorm:"default:true" json:"ativa"`
+	CreatedAt  time.Time       `json:"createdAt"`
+	UpdatedAt  time.Time       `json:"updatedAt"`
+}
+
 // Folha de Pagamento Consolidada (Geral por Clínica e Mês/Ano)
 type CompetenciaFolha struct {
 	ID        uint        `gorm:"primaryKey" json:"id"`
-	ClinicaID uint        `gorm:"not null" json:"clinicaId"`
+	ClinicaID uint        `gorm:"not null;index" json:"clinicaId"`
 	Clinica   Clinica     `gorm:"foreignKey:ClinicaID" json:"clinica,omitempty"`
 	Mes       int         `gorm:"not null" json:"mes"`
 	Ano       int         `gorm:"not null" json:"ano"`
@@ -39,9 +53,9 @@ type CompetenciaFolha struct {
 // Holerite individual do funcionário na competência
 type Holerite struct {
 	ID                 uint             `gorm:"primaryKey" json:"id"`
-	CompetenciaFolhaID uint             `gorm:"not null" json:"competenciaFolhaId"`
+	CompetenciaFolhaID uint             `gorm:"not null;index" json:"competenciaFolhaId"`
 	Competencia        CompetenciaFolha `gorm:"foreignKey:CompetenciaFolhaID" json:"competencia,omitempty"`
-	FuncionarioID      uint             `gorm:"not null" json:"funcionarioId"`
+	FuncionarioID      uint             `gorm:"not null;index" json:"funcionarioId"`
 	Funcionario        Funcionario      `gorm:"foreignKey:FuncionarioID" json:"funcionario,omitempty"`
 	DiasTrabalhados    int              `json:"diasTrabalhados"`
 	SalarioBase        float64          `json:"salarioBase"`
@@ -57,8 +71,10 @@ type Holerite struct {
 // Eventos específicos (Rubricas: DSR, INSS, Faltas, Horas Extras) dentro do Holerite
 type EventoHolerite struct {
 	ID         uint            `gorm:"primaryKey" json:"id"`
-	HoleriteID uint            `gorm:"not null" json:"holeriteId"`
-	Descricao  string          `gorm:"not null" json:"descricao"` // Ex: "INSS", "IRRF", "Vale Transporte"
+	HoleriteID uint            `gorm:"not null;index" json:"holeriteId"`
+	RubricaID  uint            `gorm:"not null" json:"rubricaId"`
+	Rubrica    RubricaFolha    `gorm:"foreignKey:RubricaID" json:"rubrica,omitempty"`
+	Descricao  string          `gorm:"not null" json:"descricao"` // Copiado da rubrica no momento do lançamento
 	Tipo       TipoEventoFolha `gorm:"not null" json:"tipo"`
 	Referencia string          `json:"referencia"`                // Ex: "11%", "5 dias", "2 horas"
 	Valor      float64         `gorm:"not null" json:"valor"`
@@ -66,3 +82,4 @@ type EventoHolerite struct {
 	UpdatedAt  time.Time       `json:"updatedAt"`
 	DeletedAt  gorm.DeletedAt  `gorm:"index" json:"-"`
 }
+

@@ -3,6 +3,7 @@ package middleware
 import (
 	"fmt"
 	"net/http"
+	"os"
 	"strings"
 
 	"odonto-flow-go/internal/models"
@@ -35,10 +36,14 @@ func AuthMiddleware(jwtSecret string) gin.HandlerFunc {
         }
 
         token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
-            if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
+            if _, ok := token.Method.(*jwt.SigningMethodRSA); !ok {
                 return nil, fmt.Errorf("unexpected signing method: %v", token.Header["alg"])
             }
-            return []byte(jwtSecret), nil
+            publicKeyBytes, err := os.ReadFile("public.pem")
+            if err != nil {
+                return nil, err
+            }
+            return jwt.ParseRSAPublicKeyFromPEM(publicKeyBytes)
         })
 
         if err != nil || !token.Valid {
@@ -139,4 +144,35 @@ func RequireRole(db *gorm.DB, allowedRoles ...string) gin.HandlerFunc {
 
         c.Next()
     }
+}
+
+// AdminAuthMiddleware enforces strict RBAC for administrative areas
+func AdminAuthMiddleware(allowedRoles ...string) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		roleRaw, exists := c.Get("userRole")
+		if !exists {
+			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "Papel do usuário não identificado"})
+			return
+		}
+
+		role := roleRaw.(string)
+		isAllowed := false
+		for _, r := range allowedRoles {
+			if role == r {
+				isAllowed = true
+				break
+			}
+		}
+
+		if !isAllowed {
+			// Regra: Se um DENTISTA ou RECEPCAO tentar acessar, abortar com 403 Forbidden
+			c.AbortWithStatusJSON(http.StatusForbidden, gin.H{
+				"error": "Acesso negado: privilégios insuficientes para esta área administrativa",
+				"code":  "ACCESS_VIOLATION_RBAC",
+			})
+			return
+		}
+
+		c.Next()
+	}
 }

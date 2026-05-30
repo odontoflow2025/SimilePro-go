@@ -3,12 +3,16 @@ package handlers
 import (
 	"net/http"
 	"odonto-flow-go/internal/models"
+	"os"
 	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/golang-jwt/jwt/v5"
+	"github.com/google/uuid"
 	"golang.org/x/crypto/bcrypt"
 	"gorm.io/gorm"
+	"context"
+	"odonto-flow-go/internal/database"
 )
 
 type AuthHandler struct {
@@ -119,7 +123,8 @@ func (h *AuthHandler) Login(c *gin.Context) {
     }
 
     // Generate JWT
-    token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
+    token := jwt.NewWithClaims(jwt.SigningMethodRS256, jwt.MapClaims{
+        "jti":         uuid.New().String(),
         "sub":         user.ID,
         "name":        user.Nome,
         "email":       user.Email,
@@ -128,19 +133,36 @@ func (h *AuthHandler) Login(c *gin.Context) {
         "exp":         time.Now().Add(time.Hour * 24).Unix(),
     })
 
-    tokenString, err := token.SignedString([]byte(h.JWTSecret))
+    privateKeyBytes, err := os.ReadFile("private.pem")
+    if err != nil {
+        c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to read private key"})
+        return
+    }
+    privateKey, err := jwt.ParseRSAPrivateKeyFromPEM(privateKeyBytes)
+    if err != nil {
+        c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to parse private key"})
+        return
+    }
+
+    tokenString, err := token.SignedString(privateKey)
     if (err != nil) {
         c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to generate token"})
         return
     }
 
     // Set JWT as HttpOnly Cookie
-    // MaxAge in seconds (24h)
     maxAge := 86400 
     
-    // In production, Secure should be true. 
-    // Here we use false for local development compatibility unless otherwise configured.
-    c.SetCookie("auth_token", tokenString, maxAge, "/", "", false, true)
+    http.SetCookie(c.Writer, &http.Cookie{
+        Name:     "auth_token",
+        Value:    tokenString,
+        MaxAge:   maxAge,
+        Path:     "/",
+        Domain:   "",
+        Secure:   true, // SameSiteNone requires Secure: true
+        HttpOnly: true,
+        SameSite: http.SameSiteNoneMode, // Allows cross-origin cookies
+    })
 
     c.JSON(http.StatusOK, gin.H{
         "token": tokenString, // Keep for legacy compatibility if needed
@@ -156,8 +178,39 @@ func (h *AuthHandler) Login(c *gin.Context) {
 // @Success      200    {object}  map[string]string
 // @Router       /auth/logout [post]
 func (h *AuthHandler) Logout(c *gin.Context) {
+	// Extrair o token do cookie (ou header)
+	cookie, err := c.Cookie("auth_token")
+	if err == nil && cookie != "" {
+		// Parseamos ignorando a assinatura apenas para extrair as claims publicas
+		token, _, _ := new(jwt.Parser).ParseUnverified(cookie, jwt.MapClaims{})
+		if claims, ok := token.Claims.(jwt.MapClaims); ok {
+			jti, okJTI := claims["jti"].(string)
+			expFloat, okExp := claims["exp"].(float64)
+			
+			if okJTI && okExp {
+				expTime := time.Unix(int64(expFloat), 0)
+				timeRemaining := time.Until(expTime)
+				if timeRemaining > 0 {
+					ctx := context.Background()
+					if database.RedisClient != nil {
+						database.RedisClient.Set(ctx, "blacklist:"+jti, "revogado", timeRemaining)
+					}
+				}
+			}
+		}
+	}
+
 	// Clear the cookie by setting maxAge to -1
-	c.SetCookie("auth_token", "", -1, "/", "", false, true)
+	http.SetCookie(c.Writer, &http.Cookie{
+		Name:     "auth_token",
+		Value:    "",
+		MaxAge:   -1,
+		Path:     "/",
+		Domain:   "",
+		Secure:   true,
+		HttpOnly: true,
+		SameSite: http.SameSiteNoneMode,
+	})
 	c.JSON(http.StatusOK, gin.H{"message": "Logged out successfully"})
 }
 

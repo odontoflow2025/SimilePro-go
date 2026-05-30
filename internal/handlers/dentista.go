@@ -101,3 +101,49 @@ func (h *DentistaHandler) FindAll(c *gin.Context) {
 
 	c.JSON(http.StatusOK, dentistas)
 }
+
+// GetProfissionaisAgenda godoc
+// @Summary      List professionals for agenda
+// @Description  Retrieve a simplified list of professionals for the clinic's agenda
+// @Tags         dentistas
+// @Produce      json
+// @Security     BearerAuth
+// @Success      200  {array}  map[string]interface{}
+// @Router       /v1/profissionais [get]
+func (h *DentistaHandler) GetProfissionaisAgenda(c *gin.Context) {
+	userClinicaID, _ := c.Get("clinicaID")
+	if userClinicaID == nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Clinic not identified"})
+		return
+	}
+
+	userRole, _ := c.Get("userRole")
+
+	query := h.DB.Preload("Usuario")
+
+	if userRole == "ADMIN_TOTAL" {
+		reqClinicaID := c.Query("clinicaId")
+		if reqClinicaID != "" {
+			query = query.Where("clinica_id = ?", reqClinicaID)
+		}
+	} else {
+		query = query.Where("clinica_id = ?", userClinicaID)
+	}
+
+	var dentistas []models.Dentista
+	if err := query.Find(&dentistas).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch profissionais"})
+		return
+	}
+
+	var profissionais []map[string]interface{}
+	for _, d := range dentistas {
+		profissionais = append(profissionais, map[string]interface{}{
+			"id":   d.ID,
+			"nome": d.Usuario.Nome,
+			"cro":  d.CRO,
+		})
+	}
+
+	c.JSON(http.StatusOK, profissionais)
+}
