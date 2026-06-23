@@ -1,6 +1,6 @@
-# 🦷 OdontoFlow API
+# 🦷 Simile Pro API
 
-**OdontoFlow** is a robust, production-ready backend built in Go, designed to streamline dental clinic management. From clinical records to financial auditing, it provides a comprehensive suite of features for modern dental practices.
+**Simile Pro** is a robust, production-ready backend built in Go, designed to streamline dental clinic management. From clinical records to financial auditing, it provides a comprehensive suite of features for modern dental practices.
 
 ---
 
@@ -68,7 +68,7 @@
     DB_HOST=localhost
     DB_USER=postgres
     DB_PASS=yourpassword
-    DB_NAME=odontoflow
+    DB_NAME=similepro
     SERVER_PORT=8080
     JWT_SECRET=your_jwt_secret
     ```

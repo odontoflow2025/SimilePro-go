@@ -5,6 +5,7 @@ import (
 	"odonto-flow-go/internal/config"
 	"odonto-flow-go/internal/handlers"
 	"odonto-flow-go/internal/middleware"
+	"odonto-flow-go/internal/repository"
 
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
@@ -39,6 +40,9 @@ func SetupRoutes(r *gin.Engine, db *gorm.DB, cfg *config.Config) {
     usuarioHandler := handlers.NewUsuarioHandler(db)
     fiscalHandler := handlers.NewFiscalHandler(db)
     rhFinanceiroHandler := handlers.NewRHFinanceiroHandler(db)
+    
+    configRepository := repository.NewConfiguracaoRepository(db)
+    configuracaoHandler := handlers.NewConfiguracaoHandler(configRepository)
 
     // Routes
     api := r.Group("/api")
@@ -262,6 +266,19 @@ func SetupRoutes(r *gin.Engine, db *gorm.DB, cfg *config.Config) {
                 admin.GET("/configuracoes/:chave", adminHandler.GetConfig)
                 admin.PUT("/configuracoes/:chave", adminHandler.SetConfig)
                 admin.GET("/logs", adminHandler.GetLogs)
+            }
+
+            configuracoes := protected.Group("/configuracoes")
+            configuracoes.Use(middleware.RequireRole(db, "ADMIN_TOTAL", "ADMIN_GERENCIAL"))
+            {
+                configuracoes.GET("", configuracaoHandler.GetAgregado)
+                configuracoes.PUT("/geral", configuracaoHandler.UpdateGeral)
+                configuracoes.POST("/salas", configuracaoHandler.CreateSala)
+                configuracoes.PUT("/salas/:id", configuracaoHandler.UpdateSala)
+                configuracoes.DELETE("/salas/:id", configuracaoHandler.DeleteSala)
+                configuracoes.POST("/integracoes", configuracaoHandler.CreateIntegracao)
+                configuracoes.PUT("/integracoes/:id", configuracaoHandler.UpdateIntegracao)
+                configuracoes.DELETE("/integracoes/:id", configuracaoHandler.DeleteIntegracao)
             }
 
 

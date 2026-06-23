@@ -10,16 +10,16 @@ import (
 	"time"
 )
 
-// OdontoflowGatewayAdapter is the HTTP client pointing to the external microservice gateway-odontoflow
-type OdontoflowGatewayAdapter struct {
+// SimileProGatewayAdapter is the HTTP client pointing to the external microservice gateway-similepro
+type SimileProGatewayAdapter struct {
 	BaseURL string
 	Client  *http.Client
 }
 
 // NewDockMockAdapter initializes a connection to the microservice
 func NewDockMockAdapter() PaymentService {
-	log.Println("[INFO] Initializing OdontoflowGatewayAdapter to link with gateway-odontoflow...")
-	return &OdontoflowGatewayAdapter{
+	log.Println("[INFO] Initializing SimileProGatewayAdapter to link with gateway-similepro...")
+	return &SimileProGatewayAdapter{
 		BaseURL: "http://localhost:8081", // Assuming gateway runs on 8081 to avoid 8080 clash
 		Client: &http.Client{
 			Timeout: 10 * time.Second,
@@ -27,8 +27,8 @@ func NewDockMockAdapter() PaymentService {
 	}
 }
 
-// GenerateCharge calls the gateway-odontoflow POST /api/v1/payments/init
-func (d *OdontoflowGatewayAdapter) GenerateCharge(ctx context.Context, req PaymentRequest) (*PaymentResponse, error) {
+// GenerateCharge calls the gateway-similepro POST /api/v1/payments/init
+func (d *SimileProGatewayAdapter) GenerateCharge(ctx context.Context, req PaymentRequest) (*PaymentResponse, error) {
 	log.Printf("[INFO] GatewayAdapter: Sending charge to microservice for Amount: %.2f\n", req.Amount)
 
 	externalID := BuildExternalID(req.ClinicaID, req.FaturaID)

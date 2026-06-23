@@ -5,6 +5,7 @@ import (
 	"net/http/httptest"
 	"odonto-flow-go/internal/config"
 	"odonto-flow-go/tests/testutils"
+	"os"
 	"testing"
 
 	"github.com/gin-gonic/gin"
@@ -12,6 +13,11 @@ import (
 )
 
 func TestAuthMiddleware(t *testing.T) {
+	// Change to project root so os.ReadFile("public.pem") inside middleware works
+	cwd, _ := os.Getwd()
+	os.Chdir("../../")
+	defer os.Chdir(cwd)
+
 	gin.SetMode(gin.TestMode)
 	
 	// Load config for secret

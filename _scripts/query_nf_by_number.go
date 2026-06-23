@@ -44,7 +44,7 @@ type Produto struct {
 }
 
 func main() {
-	dsn := "host=localhost user=postgres password=root dbname=OdontoFlow port=5432 sslmode=disable TimeZone=America/Sao_Paulo"
+	dsn := "host=localhost user=postgres password=root dbname=Simile Pro port=5432 sslmode=disable TimeZone=America/Sao_Paulo"
 	db, err := gorm.Open(postgres.Open(dsn), &gorm.Config{})
 	if err != nil {
 		log.Fatal(err)

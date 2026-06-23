@@ -172,7 +172,7 @@ func (h *AgendamentoHandler) FindOne(c *gin.Context) {
     }
 
     if userRole != "ADMIN_TOTAL" && agendamento.ClinicaID != userClinicaID {
-        c.JSON(http.StatusForbidden, gin.H{"error": "Acesso negado: este agendamento pertence a outra clínica"})
+        c.JSON(http.StatusNotFound, gin.H{"error": "Agendamento not found"})
         return
     }
 
@@ -212,7 +212,7 @@ func (h *AgendamentoHandler) Update(c *gin.Context) {
 	}
 
 	if userRole != "ADMIN_TOTAL" && agendamento.ClinicaID != userClinicaID {
-		c.JSON(http.StatusForbidden, gin.H{"error": "Acesso negado: este agendamento pertence a outra clínica"})
+		c.JSON(http.StatusNotFound, gin.H{"error": "Agendamento not found"})
 		return
 	}
 
@@ -270,7 +270,7 @@ func (h *AgendamentoHandler) UpdateStatus(c *gin.Context) {
 	}
 
 	if userRole != "ADMIN_TOTAL" && agendamento.ClinicaID != userClinicaID {
-		c.JSON(http.StatusForbidden, gin.H{"error": "Acesso negado: este agendamento pertence a outra clínica"})
+		c.JSON(http.StatusNotFound, gin.H{"error": "Agendamento not found"})
 		return
 	}
 
@@ -310,7 +310,7 @@ func (h *AgendamentoHandler) Delete(c *gin.Context) {
 	}
 
 	if userRole != "ADMIN_TOTAL" && agendamento.ClinicaID != userClinicaID {
-		c.JSON(http.StatusForbidden, gin.H{"error": "Acesso negado: este agendamento pertence a outra clínica"})
+		c.JSON(http.StatusNotFound, gin.H{"error": "Agendamento not found"})
 		return
 	}
 

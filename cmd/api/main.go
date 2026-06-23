@@ -9,9 +9,9 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-// @title           OdontoFlow API
+// @title           Simile Pro API
 // @version         1.0
-// @description     Backend API for OdontoFlow dental management system.
+// @description     Backend API for Simile Pro dental management system.
 // @termsOfService  http://swagger.io/terms/
 
 // @contact.name   API Support

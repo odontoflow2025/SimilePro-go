@@ -16,7 +16,11 @@ import (
 
 func TestClinicIsolation(t *testing.T) {
 	gin.SetMode(gin.TestMode)
-	db, _ := testutils.SetupTestDB()
+	db, cleanup, err := testutils.SetupTestDB()
+	if err != nil {
+		t.Fatalf("Failed to setup test DB: %v", err)
+	}
+	defer cleanup()
 	h := handlers.NewPacienteHandler(db)
 
 	clinica1 := models.Clinica{NomeFantasia: "Clinica 1", CNPJ: "11.111.111/0001-11"}

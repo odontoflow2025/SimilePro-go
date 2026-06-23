@@ -17,10 +17,11 @@ import (
 
 func TestAgendamentoIsolation(t *testing.T) {
 	// 1. Setup
-	db, err := testutils.SetupTestDB()
+	db, cleanup, err := testutils.SetupTestDB()
 	if err != nil {
 		t.Fatalf("Failed to setup test DB: %v", err)
 	}
+	defer cleanup()
 	h := handlers.NewAgendamentoHandler(db)
 	gin.SetMode(gin.TestMode)
 

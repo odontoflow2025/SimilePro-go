@@ -1,19 +1,58 @@
 package testutils
 
 import (
+	"context"
+	"os"
+	"time"
+
 	"odonto-flow-go/internal/models"
 
-	"github.com/glebarez/sqlite"
+	"github.com/testcontainers/testcontainers-go"
+	"github.com/testcontainers/testcontainers-go/modules/postgres"
+	"github.com/testcontainers/testcontainers-go/wait"
+	gormpostgres "gorm.io/driver/postgres"
 	"gorm.io/gorm"
 )
 
-// SetupTestDB initializes an in-memory SQLite database and runs all migrations
-func SetupTestDB() (*gorm.DB, error) {
-	// Use a unique name for each database instance to avoid interference between parallel tests
-	// but within the same test context, "shared" allows multiple connections if needed.
-	db, err := gorm.Open(sqlite.Open("file::memory:?cache=private"), &gorm.Config{})
+func init() {
+	// Set dummy env vars for all tests
+	os.Setenv("ENCRYPTION_KEY", "12345678901234567890123456789012")
+	os.Setenv("JWT_SECRET", "test-secret")
+}
+
+// SetupTestDB initializes a PostgreSQL container and runs all migrations
+func SetupTestDB() (*gorm.DB, func(), error) {
+	ctx := context.Background()
+
+	dbName := "testdb"
+	dbUser := "user"
+	dbPassword := "password"
+
+	postgresContainer, err := postgres.Run(ctx,
+		"postgres:15-alpine",
+		postgres.WithDatabase(dbName),
+		postgres.WithUsername(dbUser),
+		postgres.WithPassword(dbPassword),
+		testcontainers.WithWaitStrategy(
+			wait.ForLog("database system is ready to accept connections").
+				WithOccurrence(2).WithStartupTimeout(10*time.Second)),
+	)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
+	}
+
+	connStr, err := postgresContainer.ConnectionString(ctx, "sslmode=disable")
+	if err != nil {
+		postgresContainer.Terminate(ctx)
+		return nil, nil, err
+	}
+
+	db, err := gorm.Open(gormpostgres.Open(connStr), &gorm.Config{
+		DisableForeignKeyConstraintWhenMigrating: true,
+	})
+	if err != nil {
+		postgresContainer.Terminate(ctx)
+		return nil, nil, err
 	}
 
 	// Auto-migrate all models
@@ -50,8 +89,13 @@ func SetupTestDB() (*gorm.DB, error) {
 		&models.LancamentoContabil{},
 	)
 	if err != nil {
-		return nil, err
+		postgresContainer.Terminate(ctx)
+		return nil, nil, err
 	}
 
-	return db, nil
+	cleanup := func() {
+		postgresContainer.Terminate(ctx)
+	}
+
+	return db, cleanup, nil
 }

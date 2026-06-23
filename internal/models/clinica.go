@@ -11,6 +11,7 @@ type Clinica struct {
     NomeFantasia         string         `gorm:"not null" json:"nomeFantasia"`
     RazaoSocial          string         `gorm:"not null" json:"razaoSocial"`
     CNPJ                 string         `gorm:"uniqueIndex;not null" json:"cnpj"`
+    Logo                 string         `json:"logo"`
     Endereco             string         `json:"endereco"`
     Telefone             string         `json:"telefone"`
     ResponsavelID        uint           `json:"responsavelId"`

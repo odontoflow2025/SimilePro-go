@@ -67,7 +67,7 @@ func (h *TicketHandler) CreateTicket(c *gin.Context) {
 		// 2. E-mail para a equipe de suporte (Interno)
 		suporteSubj := fmt.Sprintf("NOVO TICKET [%s] - %s", proto, subj)
 		suporteBody := fmt.Sprintf("🚨 NOVO TICKET ABERTO\n\nProtocolo: %s\nDe: %s\nAssunto: %s\n\nMensagem do Usuário:\n\"%s\"\n", proto, email, subj, msg)
-		services.SendEmail([]string{"odontoflow2@gmail.com"}, suporteSubj, suporteBody)
+		services.SendEmail([]string{"similepro2@gmail.com"}, suporteSubj, suporteBody)
 	}(req.Email, protocol, req.Subject, req.Message)
 
 	c.JSON(http.StatusCreated, ticket)

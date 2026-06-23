@@ -23,7 +23,7 @@ type CreateTransacaoInput struct {
     ClinicaID      uint                   `json:"clinicaId" binding:"required"`
     PacienteID     *uint                  `json:"pacienteId"`
     Descricao      string                 `json:"descricao" binding:"required"`
-    Valor          float64                `json:"valor" binding:"required"`
+    Valor          float64                `json:"valor" binding:"required,gt=0,lt=1000000000"`
     Tipo           models.TipoTransacao   `json:"tipo" binding:"required"`
     DataVencimento time.Time              `json:"dataVencimento" binding:"required"`
     Categoria      string                 `json:"categoria"`

@@ -38,7 +38,7 @@ func main() {
 	var funcionarios []models.Funcionario
 
 	for i := 1; i <= 15; i++ {
-		email := fmt.Sprintf("colaborador%d@odontoflow.com", i + 100) // Evitar conflitos
+		email := fmt.Sprintf("colaborador%d@similepro.com", i + 100) // Evitar conflitos
 		cpf := fmt.Sprintf("%03d%03d%03d%02d", rand.Intn(999), rand.Intn(999), rand.Intn(999), rand.Intn(99))
 		
 		user := models.User{

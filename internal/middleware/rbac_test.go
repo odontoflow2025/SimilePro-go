@@ -13,13 +13,20 @@ import (
 
 func TestRequireRole(t *testing.T) {
 	gin.SetMode(gin.TestMode)
-	db, _ := testutils.SetupTestDB()
+	db, cleanup, _ := testutils.SetupTestDB()
+	defer cleanup()
 
 	// Create test users with different roles
 	admin := models.User{Nome: "Admin", Email: "admin@rbac.com", CPF: "111.111.111-11", TipoUsuario: "ADMIN_TOTAL"}
 	dentista := models.User{Nome: "Dentista", Email: "dentista@rbac.com", CPF: "222.222.222-22", TipoUsuario: "DENTISTA"}
 	db.Create(&admin)
 	db.Create(&dentista)
+
+	// Add Dentista residency mapping for the clinic
+	db.Create(&models.Dentista{
+		UsuarioID: dentista.ID,
+		ClinicaID: 1,
+	})
 
 	t.Run("Should allow ADMIN_TOTAL to access admin-only route", func(t *testing.T) {
 		w := httptest.NewRecorder()

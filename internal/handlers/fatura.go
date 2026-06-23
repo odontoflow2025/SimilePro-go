@@ -22,7 +22,7 @@ type CreateFaturaInput struct {
     ClinicaID         uint      `json:"clinicaId" binding:"required"`
     PacienteID        uint      `json:"pacienteId" binding:"required"`
     PlanoTratamentoID *uint     `json:"planoTratamentoId"`
-    ValorTotal        float64   `json:"valorTotal" binding:"required"`
+    ValorTotal        float64   `json:"valorTotal" binding:"required,gt=0,lt=1000000000"`
     DataVencimento    time.Time `json:"dataVencimento" binding:"required"`
 }
 
@@ -70,6 +70,67 @@ func (h *FaturaHandler) Create(c *gin.Context) {
 
 	c.JSON(http.StatusCreated, fatura)
 }
+
+type UpdateFaturaInput struct {
+    ValorTotal        float64   `json:"valorTotal" binding:"required,gt=0,lt=1000000000"`
+    DataVencimento    time.Time `json:"dataVencimento" binding:"required"`
+}
+
+// Update godoc
+// @Summary      Update an invoice
+// @Description  Update details of an open invoice. Paid invoices cannot be updated.
+// @Tags         financeiro
+// @Accept       json
+// @Produce      json
+// @Security     BearerAuth
+// @Param        id     path      string             true  "Invoice ID"
+// @Param        input  body      UpdateFaturaInput  true  "Invoice Info"
+// @Success      200    {object}  models.Fatura
+// @Router       /financeiro/faturas/{id} [put]
+func (h *FaturaHandler) Update(c *gin.Context) {
+	userClinicaID, err := getClinicaIDFromContext(c)
+	userRole := getUserRoleFromContext(c)
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Clinic not identified"})
+		return
+	}
+
+	id := c.Param("id")
+	var input UpdateFaturaInput
+	if err := c.ShouldBindJSON(&input); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	var fatura models.Fatura
+	if err := h.DB.First(&fatura, id).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Fatura não encontrada"})
+		return
+	}
+
+	// Ownership check (BOLA)
+	if userRole != "ADMIN_TOTAL" && fatura.ClinicaID != userClinicaID {
+		c.JSON(http.StatusForbidden, gin.H{"error": "Não autorizado a alterar fatura de outra clínica"})
+		return
+	}
+
+	// Proteção contra Mutabilidade de Faturas Pagas
+	if fatura.Status == models.StatusFaturaPaga || fatura.Status == models.StatusFaturaCancelada {
+		c.JSON(http.StatusConflict, gin.H{"error": "Faturas pagas ou canceladas não podem ser alteradas"})
+		return
+	}
+
+	fatura.ValorTotal = input.ValorTotal
+	fatura.DataVencimento = input.DataVencimento
+
+	if err := h.DB.Save(&fatura).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Falha ao atualizar fatura"})
+		return
+	}
+
+	c.JSON(http.StatusOK, fatura)
+}
+
 
 // FindAll godoc
 // @Summary      List invoices
