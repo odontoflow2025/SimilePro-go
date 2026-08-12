@@ -3,6 +3,7 @@ package handlers
 import (
 	"net/http"
 	"odonto-flow-go/internal/models"
+	"odonto-flow-go/internal/utils"
 	"strings"
 	"time"
 
@@ -36,6 +37,16 @@ type UpdateAgendamentoInput struct {
 
 type UpdateStatusInput struct {
     Status models.StatusAgendamento `json:"status" binding:"required"`
+}
+
+// AgendamentoListDTO representa os dados essenciais para exibição em lista (Zero-Allocation de metadados inúteis).
+type AgendamentoListDTO struct {
+	ID             uint                     `json:"id"`
+	DataHoraInicio time.Time                `json:"dataHoraInicio"`
+	Status         models.StatusAgendamento `json:"status"`
+	Motivo         string                   `json:"motivo"`
+	PacienteNome   string                   `json:"pacienteNome"`
+	DentistaNome   string                   `json:"dentistaNome"`
 }
 
 // Create godoc
@@ -93,14 +104,16 @@ func (h *AgendamentoHandler) Create(c *gin.Context) {
 
 // FindAll godoc
 // @Summary      List appointments
-// @Description  List appointments with date and dentist filtering (clinic-scoped)
+// @Description  List appointments with date and dentist filtering (clinic-scoped) and Pagination
 // @Tags         agendamentos
 // @Produce      json
 // @Security     BearerAuth
 // @Param        dataInicio  query     string  false  "Start Date (YYYY-MM-DD)"
 // @Param        dataFim     query     string  false  "End Date (YYYY-MM-DD)"
 // @Param        dentistaId  query     string  false  "Dentist ID"
-// @Success      200         {array}   models.Agendamento
+// @Param        page        query     int     false  "Page number (default 1)"
+// @Param        limit       query     int     false  "Limit per page (default 20, max 50)"
+// @Success      200         {object}  utils.PaginatedResponse
 // @Router       /agendamentos [get]
 func (h *AgendamentoHandler) FindAll(c *gin.Context) {
 	userClinicaID, err := getClinicaIDFromContext(c)
@@ -111,39 +124,76 @@ func (h *AgendamentoHandler) FindAll(c *gin.Context) {
 	}
 
 	reqClinicaID := c.Query("clinicaId")
-	dataInicio := c.Query("dataInicio")
-	dataFim := c.Query("dataFim")
+	dataInicioStr := c.Query("dataInicio")
+	dataFimStr := c.Query("dataFim")
 	dentistaID := c.Query("dentistaId")
 	profissionaisIDsStr := c.Query("profissionais_ids")
 
-	var agendamentos []models.Agendamento
-	query := h.DB.Preload("Paciente").Preload("Dentista").Preload("Dentista.Usuario")
+	// Fallback para data de início: se vazio, usa hoje (meia-noite) para prevenir full table scans desnecessários
+	if dataInicioStr == "" {
+		dataInicioStr = time.Now().Format("2006-01-02")
+	}
+
+	page, limit := utils.GetPaginationParams(c)
+
+	query := h.DB.Model(&models.Agendamento{})
 
 	if userRole == "ADMIN_TOTAL" && reqClinicaID != "" {
-		query = query.Where("clinica_id = ?", reqClinicaID)
+		query = query.Where("agendamentos.clinica_id = ?", reqClinicaID)
 	} else {
-		query = query.Where("clinica_id = ?", userClinicaID)
+		query = query.Where("agendamentos.clinica_id = ?", userClinicaID)
 	}
 
 	if profissionaisIDsStr != "" {
 		ids := strings.Split(profissionaisIDsStr, ",")
-		query = query.Where("dentista_id IN ?", ids)
+		query = query.Where("agendamentos.dentista_id IN ?", ids)
 	} else if dentistaID != "" {
-		query = query.Where("dentista_id = ?", dentistaID)
-	}
-	if dataInicio != "" {
-		query = query.Where("data_hora_inicio >= ?", dataInicio)
-	}
-	if dataFim != "" {
-		query = query.Where("data_hora_fim <= ?", dataFim)
+		query = query.Where("agendamentos.dentista_id = ?", dentistaID)
 	}
 
-	if err := query.Find(&agendamentos).Error; err != nil {
+	// Filtros de data OBRIGATÓRIOS. O dataInicio sempre vai ter valor agora.
+	query = query.Where("agendamentos.data_hora_inicio >= ?", dataInicioStr+" 00:00:00")
+	if dataFimStr != "" {
+		query = query.Where("agendamentos.data_hora_fim <= ?", dataFimStr+" 23:59:59")
+	}
+
+	// 1. Fazer o Count Total antes do OFFSET/LIMIT para os metadados da resposta
+	var totalRecords int64
+	if err := query.Count(&totalRecords).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to count agendamentos"})
+		return
+	}
+
+	// 2. Fazer a projeção (Select/Joins) sem preloads
+	var dtos []AgendamentoListDTO
+	query = query.
+		Select("agendamentos.id", "agendamentos.data_hora_inicio", "agendamentos.status", "agendamentos.motivo", "pacientes.nome as paciente_nome", "users.nome as dentista_nome").
+		Joins("left join pacientes on pacientes.id = agendamentos.paciente_id").
+		Joins("left join dentistas on dentistas.id = agendamentos.dentista_id").
+		Joins("left join users on users.id = dentistas.usuario_id")
+
+	// 3. Aplicar ordenação e a paginação nativa (OFFSET/LIMIT) via Utility Scope
+	if err := query.Order("agendamentos.data_hora_inicio ASC").Scopes(utils.Paginate(page, limit)).Scan(&dtos).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch agendamentos"})
 		return
 	}
 
-	c.JSON(http.StatusOK, agendamentos)
+	// Evitar retornar 'null' no json quando slice estiver vazio (cria um slice vazio [] em vez de nulo)
+	if dtos == nil {
+		dtos = make([]AgendamentoListDTO, 0)
+	}
+
+	// Retornar a estrutura envelopada
+	response := utils.PaginatedResponse{
+		Data: dtos,
+		Meta: utils.PaginationMeta{
+			CurrentPage:  page,
+			Limit:        limit,
+			TotalRecords: totalRecords,
+		},
+	}
+
+	c.JSON(http.StatusOK, response)
 }
 
 // FindOne godoc

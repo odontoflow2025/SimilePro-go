@@ -94,6 +94,18 @@ The API is fully documented using Swagger. You can explore the interactive UI to
 **Frontend Integration:**  
 Full `swagger.json` available at `docs/swagger.json` or via `GET /api/swagger/doc.json`.
 
+## 🔄 CI/CD (Integração Contínua)
+
+Este projeto possui testes automatizados integrados com **GitHub Actions**. O pipeline de CI é acionado automaticamente a cada _push_ ou _pull request_ nas branches principais.
+
+### Pipeline Configurado:
+1. **Checkout:** Baixa o código fonte.
+2. **Setup Go:** Instala a versão correta do Golang (1.25).
+3. **Build:** Compila a API para garantir ausência de erros de sintaxe.
+4. **Testes:** Roda os testes unitários e de integração (`go test`).
+
+Você pode conferir as regras de execução no arquivo `.github/workflows/ci.yml`.
+
 ---
 
 ## ⚖️ License

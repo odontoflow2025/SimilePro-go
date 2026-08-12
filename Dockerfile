@@ -1,5 +1,5 @@
 # --- Estágio 1: Compilação ---
-FROM golang:1.24-alpine AS builder
+FROM golang:alpine AS builder
 RUN apk add --no-cache alpine-sdk
 WORKDIR /app
 COPY . .

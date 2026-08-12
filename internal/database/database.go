@@ -5,6 +5,7 @@ import (
 	"log"
 	"odonto-flow-go/internal/config"
 	"odonto-flow-go/internal/models"
+	"time"
 
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
@@ -26,6 +27,17 @@ func Connect(cfg *config.Config) (*gorm.DB, error) {
     }
 
     log.Println("Database connected successfully")
+
+	// Configuração de otimização do Connection Pool
+	sqlDB, err := db.DB()
+	if err != nil {
+		log.Println("Erro ao obter a interface nativa do DB:", err)
+		return nil, err
+	}
+
+	sqlDB.SetMaxOpenConns(80)
+	sqlDB.SetMaxIdleConns(80)
+	sqlDB.SetConnMaxLifetime(15 * time.Minute)
 
     // Auto-migrate models
     if err := db.AutoMigrate(
