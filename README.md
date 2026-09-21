@@ -1,4 +1,4 @@
-# 🦷 Odonto Flow API
+# 🦷 SimilePro API
 
 > **High-Performance Dental Clinic Management System (SaaS Backend)**
 
@@ -8,7 +8,7 @@
 ![Redis](https://img.shields.io/badge/Redis-7-DC382D?style=flat&logo=redis)
 ![Swagger](https://img.shields.io/badge/Swagger-OpenAPI-85EA2D?style=flat&logo=swagger)
 
-**Odonto Flow** (formerly Simile Pro) is a robust, production-ready RESTful API built in **Go (Golang)**. It is designed to serve as the highly scalable backend for a multi-tenant Dental Clinic Management SaaS.
+**SimilePro** (formerly Simile Pro) is a robust, production-ready RESTful API built in **Go (Golang)**. It is designed to serve as the highly scalable backend for a multi-tenant Dental Clinic Management SaaS.
 
 This repository demonstrates advanced architectural patterns, strict security compliance, and performance optimization techniques tailored for modern cloud environments.
 
@@ -85,7 +85,7 @@ The easiest way to spin up the entire ecosystem (Backend, PostgreSQL, Redis, and
    DB_HOST=similepro_postgres
    DB_USER=postgres
    DB_PASS=root
-   DB_NAME=OdontoFlow
+   DB_NAME=SimilePro
    REDIS_ADDR=similepro_redis:6379
    SERVER_PORT=8080
    JWT_SECRET=your_jwt_secret
