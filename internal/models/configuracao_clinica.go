@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"time"
 
-	"odonto-flow-go/internal/utils"
+	"SimilePro-go/internal/utils"
 
 	"gorm.io/datatypes"
 	"gorm.io/gorm"

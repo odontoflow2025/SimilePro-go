@@ -3,7 +3,7 @@ package handlers
 import (
 	"log"
 	"net/http"
-	"odonto-flow-go/internal/models"
+	"SimilePro-go/internal/models"
 	"time"
 
 	"github.com/gin-gonic/gin"

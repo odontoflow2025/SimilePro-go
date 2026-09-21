@@ -4,7 +4,7 @@ import (
 	"bytes"
 	"net/http"
 	"net/http/httptest"
-	"odonto-flow-go/internal/models"
+	"SimilePro-go/internal/models"
 	"testing"
 
 	"github.com/gin-gonic/gin"

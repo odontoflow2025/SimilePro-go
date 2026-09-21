@@ -1,7 +1,7 @@
 package rnds
 
 import (
-	"odonto-flow-go/internal/models"
+	"SimilePro-go/internal/models"
 )
 
 // Simplified FHIR structs

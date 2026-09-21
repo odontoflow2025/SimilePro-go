@@ -2,8 +2,8 @@ package main
 
 import (
 	"log"
-	"odonto-flow-go/internal/config"
-	"odonto-flow-go/internal/database"
+	"SimilePro-go/internal/config"
+	"SimilePro-go/internal/database"
 )
 
 func main() {

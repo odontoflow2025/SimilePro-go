@@ -6,7 +6,7 @@ import (
 	"os"
 	"strings"
 
-	"odonto-flow-go/internal/models"
+	"SimilePro-go/internal/models"
 
 	"github.com/gin-gonic/gin"
 	"github.com/golang-jwt/jwt/v5"

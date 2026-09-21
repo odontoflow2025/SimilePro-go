@@ -2,8 +2,8 @@ package handlers
 
 import (
 	"net/http"
-	"odonto-flow-go/internal/models"
-	"odonto-flow-go/internal/services"
+	"SimilePro-go/internal/models"
+	"SimilePro-go/internal/services"
 
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"

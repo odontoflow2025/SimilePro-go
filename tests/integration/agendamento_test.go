@@ -5,9 +5,9 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
-	"odonto-flow-go/internal/handlers"
-	"odonto-flow-go/internal/models"
-	"odonto-flow-go/tests/testutils"
+	"SimilePro-go/internal/handlers"
+	"SimilePro-go/internal/models"
+	"SimilePro-go/tests/testutils"
 	"testing"
 	"time"
 

@@ -3,8 +3,8 @@ package middleware
 import (
 	"net/http"
 	"net/http/httptest"
-	"odonto-flow-go/internal/config"
-	"odonto-flow-go/tests/testutils"
+	"SimilePro-go/internal/config"
+	"SimilePro-go/tests/testutils"
 	"os"
 	"testing"
 

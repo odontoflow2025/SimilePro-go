@@ -5,7 +5,7 @@ import (
 	"os"
 	"time"
 
-	"odonto-flow-go/internal/models"
+	"SimilePro-go/internal/models"
 
 	"github.com/testcontainers/testcontainers-go"
 	"github.com/testcontainers/testcontainers-go/modules/postgres"

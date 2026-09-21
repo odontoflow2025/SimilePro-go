@@ -3,8 +3,8 @@ package services
 import (
 	"errors"
 	"fmt"
-	"odonto-flow-go/internal/models"
-	"odonto-flow-go/internal/rnds"
+	"SimilePro-go/internal/models"
+	"SimilePro-go/internal/rnds"
 	"time"
 
 	"gorm.io/gorm"

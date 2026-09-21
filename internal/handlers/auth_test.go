@@ -5,8 +5,8 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
-	"odonto-flow-go/internal/models"
-	"odonto-flow-go/tests/testutils"
+	"SimilePro-go/internal/models"
+	"SimilePro-go/tests/testutils"
 	"testing"
 
 	"github.com/gin-gonic/gin"

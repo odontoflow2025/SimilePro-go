@@ -3,7 +3,7 @@ package services
 import (
 	"encoding/json"
 	"log"
-	"odonto-flow-go/internal/models"
+	"SimilePro-go/internal/models"
 
 	"gorm.io/gorm"
 )

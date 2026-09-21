@@ -7,7 +7,7 @@ import (
 	"fmt"
 
 	"github.com/gin-gonic/gin"
-	"odonto-flow-go/internal/database"
+	"SimilePro-go/internal/database"
 )
 
 // LoginRateLimiter implementa Token Bucket via Redis limitando a 5 tentativas por IP a cada 5 minutos

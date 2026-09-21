@@ -5,7 +5,7 @@ import (
 	"log"
 	"time"
 
-	"odonto-flow-go/internal/models"
+	"SimilePro-go/internal/models"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 )

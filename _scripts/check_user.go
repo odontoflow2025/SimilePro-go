@@ -1,8 +1,8 @@
 package main
 import (
 "fmt"
-"odonto-flow-go/internal/config"
-"odonto-flow-go/internal/database"
+"SimilePro-go/internal/config"
+"SimilePro-go/internal/database"
 )
 func main() {
 cfg, _ := config.LoadConfig()

@@ -8,7 +8,7 @@ import (
 	"strconv"
 	"time"
 
-	"odonto-flow-go/internal/models"
+	"SimilePro-go/internal/models"
 
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"

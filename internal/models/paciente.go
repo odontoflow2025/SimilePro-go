@@ -2,7 +2,7 @@ package models
 
 import (
 	"time"
-	"odonto-flow-go/internal/utils"
+	"SimilePro-go/internal/utils"
 
 	"gorm.io/gorm"
 )

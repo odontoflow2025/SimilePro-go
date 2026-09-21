@@ -2,15 +2,15 @@ package routes
 
 import (
 	"net/http"
-	"odonto-flow-go/internal/config"
-	"odonto-flow-go/internal/handlers"
-	"odonto-flow-go/internal/middleware"
-	"odonto-flow-go/internal/repository"
+	"SimilePro-go/internal/config"
+	"SimilePro-go/internal/handlers"
+	"SimilePro-go/internal/middleware"
+	"SimilePro-go/internal/repository"
 
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
 
-	_ "odonto-flow-go/docs"
+	_ "SimilePro-go/docs"
 
 	swaggerFiles "github.com/swaggo/files"
 	ginSwagger "github.com/swaggo/gin-swagger"

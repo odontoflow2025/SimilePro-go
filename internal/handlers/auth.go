@@ -2,7 +2,7 @@ package handlers
 
 import (
 	"net/http"
-	"odonto-flow-go/internal/models"
+	"SimilePro-go/internal/models"
 	"os"
 	"time"
 
@@ -12,7 +12,7 @@ import (
 	"golang.org/x/crypto/bcrypt"
 	"gorm.io/gorm"
 	"context"
-	"odonto-flow-go/internal/database"
+	"SimilePro-go/internal/database"
 )
 
 type AuthHandler struct {

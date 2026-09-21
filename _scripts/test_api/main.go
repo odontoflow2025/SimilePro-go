@@ -5,9 +5,9 @@ import (
 	"io/ioutil"
 	"log"
 	"net/http"
-	"odonto-flow-go/internal/config"
-	"odonto-flow-go/internal/database"
-	"odonto-flow-go/internal/models"
+	"SimilePro-go/internal/config"
+	"SimilePro-go/internal/database"
+	"SimilePro-go/internal/models"
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"

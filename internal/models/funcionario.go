@@ -2,7 +2,7 @@ package models
 
 import (
 	"fmt"
-	"odonto-flow-go/internal/utils"
+	"SimilePro-go/internal/utils"
 	"strconv"
 	"time"
 

@@ -1,7 +1,7 @@
 package repository
 
 import (
-	"odonto-flow-go/internal/models"
+	"SimilePro-go/internal/models"
 
 	"gorm.io/gorm"
 )

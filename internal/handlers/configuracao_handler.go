@@ -4,8 +4,8 @@ import (
 	"net/http"
 	"strconv"
 
-	"odonto-flow-go/internal/models"
-	"odonto-flow-go/internal/repository"
+	"SimilePro-go/internal/models"
+	"SimilePro-go/internal/repository"
 
 	"github.com/gin-gonic/gin"
 )

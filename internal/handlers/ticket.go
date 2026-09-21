@@ -3,8 +3,8 @@ package handlers
 import (
 	"fmt"
 	"net/http"
-	"odonto-flow-go/internal/models"
-	"odonto-flow-go/internal/services"
+	"SimilePro-go/internal/models"
+	"SimilePro-go/internal/services"
 	"time"
 
 	"github.com/gin-gonic/gin"

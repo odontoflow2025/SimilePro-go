@@ -2,8 +2,8 @@ package handlers
 
 import (
 	"net/http"
-	"odonto-flow-go/internal/models"
-	"odonto-flow-go/internal/utils"
+	"SimilePro-go/internal/models"
+	"SimilePro-go/internal/utils"
 	"strings"
 	"time"
 
@@ -129,9 +129,14 @@ func (h *AgendamentoHandler) FindAll(c *gin.Context) {
 	dentistaID := c.Query("dentistaId")
 	profissionaisIDsStr := c.Query("profissionais_ids")
 
-	// Fallback para data de início: se vazio, usa hoje (meia-noite) para prevenir full table scans desnecessários
+	// Fallback para data de início: se vazio, usa hoje para restringir a busca ao dia atual
 	if dataInicioStr == "" {
 		dataInicioStr = time.Now().Format("2006-01-02")
+	}
+
+	// Se dataFim estiver vazio, trava a busca exatamente para o final do mesmo dia (evitando buscar todo o futuro)
+	if dataFimStr == "" {
+		dataFimStr = dataInicioStr
 	}
 
 	page, limit := utils.GetPaginationParams(c)
@@ -151,11 +156,8 @@ func (h *AgendamentoHandler) FindAll(c *gin.Context) {
 		query = query.Where("agendamentos.dentista_id = ?", dentistaID)
 	}
 
-	// Filtros de data OBRIGATÓRIOS. O dataInicio sempre vai ter valor agora.
-	query = query.Where("agendamentos.data_hora_inicio >= ?", dataInicioStr+" 00:00:00")
-	if dataFimStr != "" {
-		query = query.Where("agendamentos.data_hora_fim <= ?", dataFimStr+" 23:59:59")
-	}
+	// Aplica a janela de tempo rigorosa de exatamente 1 dia (ou o range fornecido)
+	query = query.Where("agendamentos.data_hora_inicio >= ? AND agendamentos.data_hora_inicio <= ?", dataInicioStr+" 00:00:00", dataFimStr+" 23:59:59")
 
 	// 1. Fazer o Count Total antes do OFFSET/LIMIT para os metadados da resposta
 	var totalRecords int64

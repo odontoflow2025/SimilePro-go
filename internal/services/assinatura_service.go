@@ -2,7 +2,7 @@ package services
 
 import (
 	"errors"
-	"odonto-flow-go/internal/models"
+	"SimilePro-go/internal/models"
 	"time"
 
 	"gorm.io/gorm"
