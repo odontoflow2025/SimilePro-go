@@ -8,7 +8,7 @@
 ![Redis](https://img.shields.io/badge/Redis-7-DC382D?style=flat&logo=redis)
 ![Swagger](https://img.shields.io/badge/Swagger-OpenAPI-85EA2D?style=flat&logo=swagger)
 
-**SimilePro** (formerly Simile Pro) is a robust, production-ready RESTful API built in **Go (Golang)**. It is designed to serve as the highly scalable backend for a multi-tenant Dental Clinic Management SaaS.
+**SimilePro** is a robust, production-ready RESTful API built in **Go (Golang)**. It is designed to serve as the highly scalable backend for a multi-tenant Dental Clinic Management SaaS.
 
 This repository demonstrates advanced architectural patterns, strict security compliance, and performance optimization techniques tailored for modern cloud environments.
 
