@@ -1,112 +1,112 @@
-# 🦷 Simile Pro API
+# 🦷 Odonto Flow API
 
-**Simile Pro** is a robust, production-ready backend built in Go, designed to streamline dental clinic management. From clinical records to financial auditing, it provides a comprehensive suite of features for modern dental practices.
+> **High-Performance Dental Clinic Management System (SaaS Backend)**
 
----
+![Go Version](https://img.shields.io/badge/Go-1.25+-00ADD8?style=flat&logo=go)
+![Docker](https://img.shields.io/badge/Docker-Enabled-2496ED?style=flat&logo=docker)
+![PostgreSQL](https://img.shields.io/badge/PostgreSQL-15-4169E1?style=flat&logo=postgresql)
+![Redis](https://img.shields.io/badge/Redis-7-DC382D?style=flat&logo=redis)
+![Swagger](https://img.shields.io/badge/Swagger-OpenAPI-85EA2D?style=flat&logo=swagger)
 
-## 🚀 Key Modules
+**Odonto Flow** (formerly Simile Pro) is a robust, production-ready RESTful API built in **Go (Golang)**. It is designed to serve as the highly scalable backend for a multi-tenant Dental Clinic Management SaaS.
 
-### 🏥 Clinical Management
-- **Patients & Records:** Full lifecycle management of patient profiles.
-- **Anamnesis & Alerts:** Detailed health history with critical alerts (Allergies, Diabetes, etc.) that override standard views.
-- **Treatment Plans:** Creation of complex treatment plans with itemized procedures and cost tracking.
-- **Evolution Notes:** chronological tracking of patient progress during sessions.
-
-### 💰 Financial & Accounting
-- **Transactions & Invoices:** Complete control over revenue and expenses.
-- **Account Chart:** Hierarchical chart of accounts for professional bookkeeping.
-- **Cash Flow Dashboard:** Date-filtered insights into the clinic's liquidity.
-- **Insurance (Convênios):** Integration with major health insurance providers.
-
-### 🛡️ Security & Auditing
-- **JWT Authentication:** Secure access control with user roles.
-- **Audit Logs:** Global middleware capturing every sensitive state change in the system.
-- **Privacy Protocol:** A unique "Protocolo de Auditoria" system that allows temporary access to patient data originating from other clinics during global searches.
-
-### ☁️ SaaS & Integration
-- **Multi-tenant:** SaaS-ready architecture focused on multi-clinic environments.
-- **Subscription Management:** Built-in plan levels and status tracking.
-- **RNDS Integration:** Ready for Brazil's National Health Data Network integration.
+This repository demonstrates advanced architectural patterns, strict security compliance, and performance optimization techniques tailored for modern cloud environments.
 
 ---
 
-## 🛠 Tech Stack
-- **Language:** Go (Golang) 1.21+
-- **Framework:** Gin Gonic (High-performance HTTP router)
-- **ORM:** GORM (PostgreSQL focused)
-- **Documentation:** Swagger (Swaggo)
-- **Security:** JWT (JSON Web Tokens) & Bcrypt
+## 🏛️ Engineering & Architecture Highlights
+
+This API was engineered with a strong focus on performance and security, mitigating standard OWASP Top 10 vulnerabilities.
+
+### ⚡ Performance & Scalability
+* **Zero-Allocation DTOs & Projections:** Heavy endpoints bypass full ORM preloads (GORM) in favor of lightweight DTOs and optimized SQL Joins, significantly reducing memory footprint and GC (Garbage Collection) pressure.
+* **Strict Pagination & Bounded Queries:** Engineered date-bound query constraints and offset/limit pagination to prevent full-table scans (e.g., bounding schedule queries to 24-hour windows), dropping response times from minutes to milliseconds.
+* **Connection Pooling:** Finely tuned database connection pools for high-concurrency environments.
+
+### 🛡️ Security & Compliance (OWASP Top 10)
+* **RSA-Signed JWT Authentication:** Stateless and secure authentication using asymmetric RSA keys.
+* **Data Encryption at Rest:** Sensitive patient data (such as National IDs/CPFs) are encrypted in the database using **AES-GCM**.
+* **Redis-Backed Rate Limiting:** Distributed rate limiting blocks brute-force and DoS attacks at the middleware layer.
+* **Strict RBAC & Multi-Tenancy:** Role-Based Access Control isolates permissions (e.g., Dentists vs. HR vs. Admins), while a strict Tenant DB Middleware guarantees data isolation between different clinics.
+* **Audit Logging:** Global middleware captures and logs every sensitive state change in the system for accountability.
 
 ---
 
-## 📂 Project Structure
-```bash
-├── cmd/api           # Application entry point (main.go)
-├── docs/             # Auto-generated Swagger documentation
-├── internal/
-│   ├── config        # Environment and configuration logic
-│   ├── database      # Database connection & migration scripts
-│   ├── handlers      # Business logic / Controllers
-│   ├── middleware    # Auth, CORS, Audit & Security guards
-│   ├── models        # GORM entities & data structures
-│   └── routes        # API Route definitions
-└── run.bat           # Quick startup script for Windows
-```
+## 🛠️ Tech Stack
+
+* **Language:** Go (Golang) 1.25+
+* **Framework:** Gin Gonic (High-performance HTTP web framework)
+* **Database / ORM:** PostgreSQL 15 & GORM
+* **Cache & Security:** Redis 7 (Rate limiting & ephemeral storage)
+* **CI/CD:** GitHub Actions
+* **Infrastructure:** Docker, Docker Compose, Cloudflare Tunnels (Zero Trust Network Access)
+* **Documentation:** Swaggo (OpenAPI 2.0)
 
 ---
 
-## ⚙️ Getting Started
+## 🚀 Key Business Modules
+
+### 🏥 Clinical Core
+* **Patients & Records:** Full lifecycle management with dynamic health alerts (Allergies, Diabetes, etc.).
+* **Scheduling:** Conflict-free appointment management with real-time status tracking.
+* **Treatment Plans & Evolutions:** Itemized odontological budgets and chronological clinical notes.
+
+### 💰 Financial & HR (Strict RBAC)
+* **Accounts Payable/Receivable:** Full transaction tracking and invoice (Faturas) management.
+* **Cash Flow Dashboard:** Real-time BI metrics and cash flow aggregations.
+* **Payroll (Folha):** Dynamic salary calculations, pay stubs, and HR management.
+
+---
+
+## 🔄 CI/CD Pipeline
+
+This project utilizes **GitHub Actions** to enforce continuous integration and code quality. The pipeline triggers on every `push` and `pull request` to the main branches, performing:
+
+1. **Environment Setup:** Provisions the Go 1.25 environment.
+2. **Dependency Resolution:** Downloads and caches Go modules.
+3. **Swagger Generation:** Automatically regenerates the `docs/swagger.json` file ensuring documentation is never out of sync with the code.
+4. **Build & Test:** Compiles the binary and runs the automated unit and integration test suites.
+
+---
+
+## ⚙️ Getting Started (Local Development)
+
+The easiest way to spin up the entire ecosystem (Backend, PostgreSQL, Redis, and Cloudflare Tunnel) is via Docker.
 
 ### Prerequisites
-- Go installed
-- PostgreSQL instance running
+* Docker & Docker Compose
+* Go 1.25+ (If running locally without Docker)
 
-### Installation
-1.  **Clone the repository**
-2.  **Configure Environment:** Create a `.env` file (see `internal/config`) with:
-    ```env
-    DB_HOST=localhost
-    DB_USER=postgres
-    DB_PASS=yourpassword
-    DB_NAME=similepro
-    SERVER_PORT=8080
-    JWT_SECRET=your_jwt_secret
-    ```
-3.  **Install dependencies:**
-    ```bash
-    go mod tidy
-    ```
-4.  **Run the application:**
-    ```bash
-    ./run.bat
-    ```
-    *The database tables will be auto-migrated on startup.*
+### Running with Docker Compose
+1. **Clone the repository.**
+2. **Setup Environment Variables:** Create a `.env` file in the root directory:
+   ```env
+   ENV=development
+   DB_HOST=similepro_postgres
+   DB_USER=postgres
+   DB_PASS=root
+   DB_NAME=OdontoFlow
+   REDIS_ADDR=similepro_redis:6379
+   SERVER_PORT=8080
+   JWT_SECRET=your_jwt_secret
+   CLOUDFLARE_TUNNEL_TOKEN=your_token_here
+   ```
+3. **Build and Run:**
+   ```bash
+   docker compose up -d --build
+   ```
+   *The database tables will be auto-migrated on startup.*
 
 ---
 
-## 📖 API Documentation
+## 📖 API Documentation (Swagger)
 
-The API is fully documented using Swagger. You can explore the interactive UI to test endpoints and view data models.
+The API is fully documented using Swagger, providing an interactive UI to test endpoints, explore data models, and view required JWT scopes.
 
-**Access it at:**  
-`http://localhost:8080/api/swagger/index.html`
-
-**Frontend Integration:**  
-Full `swagger.json` available at `docs/swagger.json` or via `GET /api/swagger/doc.json`.
-
-## 🔄 CI/CD (Integração Contínua)
-
-Este projeto possui testes automatizados integrados com **GitHub Actions**. O pipeline de CI é acionado automaticamente a cada _push_ ou _pull request_ nas branches principais.
-
-### Pipeline Configurado:
-1. **Checkout:** Baixa o código fonte.
-2. **Setup Go:** Instala a versão correta do Golang (1.25).
-3. **Build:** Compila a API para garantir ausência de erros de sintaxe.
-4. **Testes:** Roda os testes unitários e de integração (`go test`).
-
-Você pode conferir as regras de execução no arquivo `.github/workflows/ci.yml`.
+* **Interactive UI:** `http://localhost:8080/api/swagger/index.html`
+* **Raw JSON (For Front-end Generators like Flutter/Dart):** `http://localhost:8080/api/swagger/doc.json`
 
 ---
 
 ## ⚖️ License
-This project is for internal use. All rights reserved.
+This project is proprietary software. All rights reserved.
