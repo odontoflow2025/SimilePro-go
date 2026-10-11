@@ -17,8 +17,8 @@ export const options = {
 
 export default function () {
   // Ajuste a URL para o endpoint desejado.
-  // IMPORTANTE: odontoflow_backend é o nome do container no docker-compose.yml
-  const url = 'http://odontoflow_backend:8080/api/agendamentos';
+  // IMPORTANTE: similepro_backend é o nome do container no docker-compose.yml
+  const url = 'http://similepro_backend:8080/api/agendamentos';
 
   // Como a aplicação exige JWT, substitua "SEU_TOKEN_AQUI" por um token válido real gerado na aplicação.
   const payload = null;

@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   redis:
     image: redis:7-alpine
@@ -12,8 +10,11 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: odontoflow_backend
+    container_name: similepro_backend
+    env_file:
+      - .env
     environment:
+      ENCRYPTION_KEY: "${ENCRYPTION_KEY:?configure ENCRYPTION_KEY in backend .env}"
       ENV: development
       REDIS_ADDR: similepro_redis:6379
     volumes:
@@ -30,10 +31,8 @@ services:
     container_name: similepro_tunnel
     restart: always
     environment:
-      - TUNNEL_TOKEN=${CLOUDFLARE_TUNNEL_TOKEN}
+      - TUNNEL_TOKEN=${CLOUDFLARE_TUNNEL_TOKEN:?configure CLOUDFLARE_TUNNEL_TOKEN in the backend .env file}
     command: tunnel run
-    depends_on:
-      - backend
     networks:
       - similepro_shared
 
@@ -41,9 +40,9 @@ services:
     image: postgres:15-alpine
     container_name: similepro_postgres
     environment:
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: root
-      POSTGRES_DB: OdontoFlow
+      POSTGRES_USER: "${DB_USER:-postgres}"
+      POSTGRES_PASSWORD: "${DB_PASSWORD:?configure DB_PASSWORD in backend .env}"
+      POSTGRES_DB: "${DB_NAME:?configure DB_NAME in backend .env}"
     ports:
       - "5432:5432" # Expõe para você conseguir olhar o banco pelo DBeaver/PgAdmin se quiser
     volumes:
@@ -58,5 +57,5 @@ volumes:
 
 networks:
   similepro_shared:
-    external:
-      name: similepro_global_net
+    name: similepro_global_net
+    external: true

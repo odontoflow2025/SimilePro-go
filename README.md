@@ -79,7 +79,7 @@ The easiest way to spin up the entire ecosystem (Backend, PostgreSQL, Redis, and
 
 ### Running with Docker Compose
 1. **Clone the repository.**
-2. **Setup Environment Variables:** Create a `.env` file in the root directory:
+2. **Setup Environment Variables:** Copy `.env.example` to `.env` in the root directory and fill in the required values. The Cloudflare Tunnel token must be set as `CLOUDFLARE_TUNNEL_TOKEN`; Compose stops with a clear error when it is missing. Keep `.env` local and never commit it:
    ```env
    ENV=development
    DB_HOST=similepro_postgres
@@ -89,13 +89,39 @@ The easiest way to spin up the entire ecosystem (Backend, PostgreSQL, Redis, and
    REDIS_ADDR=similepro_redis:6379
    SERVER_PORT=8080
    JWT_SECRET=your_jwt_secret
-   CLOUDFLARE_TUNNEL_TOKEN=your_token_here
+   ```
+   Add your Cloudflare Tunnel token to the local `.env` file:
+   ```env
+   CLOUDFLARE_TUNNEL_TOKEN=<paste-your-tunnel-token-here>
    ```
 3. **Build and Run:**
    ```bash
    docker compose up -d --build
    ```
    *The database tables will be auto-migrated on startup.*
+
+### Gateway deployment
+
+The standalone `SimilePro-gateway` Docker image is the single ingress for the
+web application and API. It routes `/api/*` to this service and all other
+paths to the Next.js frontend. The gateway and both applications join the
+external `similepro_global_net` Docker network.
+
+Configure the Cloudflare Tunnel public hostname to use
+`http://similepro_gateway:8080`; do not route the public hostname directly to
+the API or frontend. Start the standalone gateway Compose project as well as
+the frontend and backend projects. Server-side frontend API calls use
+`API_INTERNAL_URL` to reach the gateway.
+
+The Tunnel connector runs in the backend Compose project and reads
+`CLOUDFLARE_TUNNEL_TOKEN` from that project's root `.env` file. Do not put the
+token in the gateway repository or send it through chat.
+
+The gateway applies basic HTTP limits and routing. Authentication, clinic
+isolation, role checks, and business rules remain in the Go API. Keep the API's
+existing authentication and rate-limit checks enabled. Add gateway IP-based
+rate limiting only after the real client IP forwarding and trusted-proxy
+chain are configured for the Cloudflare Tunnel.
 
 ---
 

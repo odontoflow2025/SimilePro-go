@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/golang-jwt/jwt/v5"
@@ -71,6 +72,14 @@ func (a *AuthProvider) AuthMiddleware() gin.HandlerFunc {
 		}
 
 		if claims, ok := token.Claims.(jwt.MapClaims); ok && token.Valid {
+			// Enforce an absolute one-hour session, including older tokens without iat.
+			issuedAt, hasIssuedAt := claims["iat"].(float64)
+			issuedAtTime := time.Unix(int64(issuedAt), 0)
+			now := time.Now()
+			if !hasIssuedAt || issuedAt <= 0 || issuedAtTime.Before(now.Add(-time.Hour)) || issuedAtTime.After(now.Add(30*time.Second)) {
+				c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "Sessão expirada; faça login novamente"})
+				return
+			}
 			if sub, ok := claims["sub"].(float64); ok {
 				c.Set("userID", uint(sub))
 			} else {

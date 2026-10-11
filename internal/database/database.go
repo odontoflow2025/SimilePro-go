@@ -39,8 +39,9 @@ func Connect(cfg *config.Config) (*gorm.DB, error) {
 	sqlDB.SetMaxIdleConns(80)
 	sqlDB.SetConnMaxLifetime(15 * time.Minute)
 
-    // Auto-migrate models
-    if err := db.AutoMigrate(
+	// User and Clinica reference each other. Create all tables and columns
+	// first, then add foreign-key constraints after every referenced table exists.
+	modelsToMigrate := []interface{}{
         &models.User{}, &models.Clinica{}, &models.Dentista{}, &models.Paciente{}, 
         &models.Funcionario{}, &models.Procedimento{}, &models.Agendamento{}, 
         &models.PlanoTratamento{}, &models.ItemPlano{}, &models.Evolucao{}, 
@@ -51,8 +52,15 @@ func Connect(cfg *config.Config) (*gorm.DB, error) {
         &models.CompetenciaFolha{}, &models.Holerite{}, &models.EventoHolerite{}, 
         &models.NotaFiscalServico{}, &models.ImpostoGuia{}, &models.LancamentoContabil{},
         &models.Ticket{},
-    ); err != nil {
-        log.Println("Warning: Auto-migration encountered an error (continuing):", err)
+	}
+
+	db.Config.DisableForeignKeyConstraintWhenMigrating = true
+	if err := db.AutoMigrate(modelsToMigrate...); err != nil {
+		return nil, fmt.Errorf("base schema migration failed: %w", err)
+	}
+	db.Config.DisableForeignKeyConstraintWhenMigrating = false
+	if err := db.AutoMigrate(modelsToMigrate...); err != nil {
+		return nil, fmt.Errorf("foreign-key migration failed: %w", err)
     }
 
     return db, nil

@@ -3,7 +3,9 @@ FROM golang:alpine AS builder
 RUN apk add --no-cache alpine-sdk
 WORKDIR /app
 COPY . .
-RUN go mod tidy
+RUN go mod download
+RUN go install github.com/swaggo/swag/cmd/swag@v1.16.6
+RUN swag init -g cmd/api/main.go
 RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-w -s" -o odonto-flow-api ./cmd/api/main.go
 
 # --- Estágio 2: Execução Segura ---

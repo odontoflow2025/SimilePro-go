@@ -113,6 +113,20 @@ func RequireRole(db *gorm.DB, allowedRoles ...string) gin.HandlerFunc {
              return
         }
 
+		// Privileged clinic staff are linked directly to one clinic on their
+		// user record; their scope must match the clinic in the signed session.
+		switch user.TipoUsuario {
+		case "ADMIN_GERENCIAL", "ADMINISTRATIVO", "RH", "FINANCEIRO", "FATURISTA":
+			if user.ClinicaID > 0 {
+				if user.ClinicaID == clinicaID {
+					c.Next()
+					return
+				}
+				c.AbortWithStatusJSON(http.StatusForbidden, gin.H{"error": "Acesso negado: usuário fora do escopo desta clínica"})
+				return
+			}
+		}
+
         // Check if user is an active employee or dentist in THIS clinic
         var activeResidency bool
         

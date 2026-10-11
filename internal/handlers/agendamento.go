@@ -1,9 +1,9 @@
 package handlers
 
 import (
-	"net/http"
 	"SimilePro-go/internal/models"
 	"SimilePro-go/internal/utils"
+	"net/http"
 	"strings"
 	"time"
 
@@ -12,31 +12,36 @@ import (
 )
 
 type AgendamentoHandler struct {
-    DB *gorm.DB
+	DB *gorm.DB
 }
 
 func NewAgendamentoHandler(db *gorm.DB) *AgendamentoHandler {
-    return &AgendamentoHandler{DB: db}
+	return &AgendamentoHandler{DB: db}
 }
 
 type CreateAgendamentoInput struct {
-    PacienteID       uint      `json:"pacienteId" binding:"required"`
-    DentistaID       uint      `json:"dentistaId" binding:"required"`
-    DataHoraInicio   time.Time `json:"dataHoraInicio" binding:"required"`
-    DataHoraFim      time.Time `json:"dataHoraFim" binding:"required"`
-    Motivo           string    `json:"motivo"`
-    UsuarioCriacaoID uint      `json:"usuarioCriacaoId"`
+	PacienteID       uint      `json:"pacienteId" binding:"required"`
+	DentistaID       uint      `json:"dentistaId" binding:"required"`
+	DataHoraInicio   time.Time `json:"dataHoraInicio" binding:"required"`
+	DataHoraFim      time.Time `json:"dataHoraFim" binding:"required"`
+	Motivo           string    `json:"motivo"`
+	UsuarioCriacaoID uint      `json:"usuarioCriacaoId"`
 }
 
 type UpdateAgendamentoInput struct {
-    MotivoConsulta *string                   `json:"motivoConsulta"`
-    Status         *models.StatusAgendamento `json:"status"`
-    DataHoraInicio *time.Time                `json:"dataHoraInicio"`
-    DataHoraFim    *time.Time                `json:"dataHoraFim"`
+	MotivoConsulta *string                   `json:"motivoConsulta"`
+	Status         *models.StatusAgendamento `json:"status"`
+	DataHoraInicio *time.Time                `json:"dataHoraInicio"`
+	DataHoraFim    *time.Time                `json:"dataHoraFim"`
 }
 
 type UpdateStatusInput struct {
-    Status models.StatusAgendamento `json:"status" binding:"required"`
+	Status models.StatusAgendamento `json:"status" binding:"required"`
+}
+
+type UpdateTriageInput struct {
+	MotivoConsulta string                   `json:"motivoConsulta" binding:"required"`
+	Status         models.StatusAgendamento `json:"status" binding:"required"`
 }
 
 // AgendamentoListDTO representa os dados essenciais para exibição em lista (Zero-Allocation de metadados inúteis).
@@ -184,6 +189,11 @@ func (h *AgendamentoHandler) FindAll(c *gin.Context) {
 	if dtos == nil {
 		dtos = make([]AgendamentoListDTO, 0)
 	}
+	if userRole == "RECEPCIONISTA" {
+		for i := range dtos {
+			dtos[i].Motivo = withoutTriage(dtos[i].Motivo)
+		}
+	}
 
 	// Retornar a estrutura envelopada
 	response := utils.PaginatedResponse{
@@ -209,26 +219,29 @@ func (h *AgendamentoHandler) FindAll(c *gin.Context) {
 // @Failure      403  {object}  map[string]string
 // @Router       /agendamentos/{id} [get]
 func (h *AgendamentoHandler) FindOne(c *gin.Context) {
-    userClinicaID, err := getClinicaIDFromContext(c)
-    userRole := getUserRoleFromContext(c)
-    if err != nil {
-        c.JSON(http.StatusUnauthorized, gin.H{"error": "Clinic not identified"})
-        return
-    }
+	userClinicaID, err := getClinicaIDFromContext(c)
+	userRole := getUserRoleFromContext(c)
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Clinic not identified"})
+		return
+	}
 
-    id := c.Param("id")
-    var agendamento models.Agendamento
-    if err := h.DB.Preload("Paciente").Preload("Dentista").First(&agendamento, id).Error; err != nil {
-        c.JSON(http.StatusNotFound, gin.H{"error": "Agendamento not found"})
-        return
-    }
+	id := c.Param("id")
+	var agendamento models.Agendamento
+	if err := h.DB.Preload("Paciente").Preload("Dentista").First(&agendamento, id).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Agendamento not found"})
+		return
+	}
 
-    if userRole != "ADMIN_TOTAL" && agendamento.ClinicaID != userClinicaID {
-        c.JSON(http.StatusNotFound, gin.H{"error": "Agendamento not found"})
-        return
-    }
+	if userRole != "ADMIN_TOTAL" && agendamento.ClinicaID != userClinicaID {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Agendamento not found"})
+		return
+	}
+	if userRole == "RECEPCIONISTA" {
+		agendamento.Motivo = withoutTriage(agendamento.Motivo)
+	}
 
-    c.JSON(http.StatusOK, agendamento)
+	c.JSON(http.StatusOK, agendamento)
 }
 
 // Update godoc
@@ -267,6 +280,11 @@ func (h *AgendamentoHandler) Update(c *gin.Context) {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Agendamento not found"})
 		return
 	}
+	if userRole == "RECEPCIONISTA" && input.MotivoConsulta != nil &&
+		(strings.Contains(agendamento.Motivo, "[TRIAGEM]") || strings.Contains(*input.MotivoConsulta, "[TRIAGEM]")) {
+		c.JSON(http.StatusForbidden, gin.H{"error": "Somente técnico ou dentista pode registrar triagem"})
+		return
+	}
 
 	if input.MotivoConsulta != nil {
 		agendamento.Motivo = *input.MotivoConsulta
@@ -285,8 +303,48 @@ func (h *AgendamentoHandler) Update(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update agendamento"})
 		return
 	}
+	if userRole == "RECEPCIONISTA" {
+		agendamento.Motivo = withoutTriage(agendamento.Motivo)
+	}
 
 	c.JSON(http.StatusOK, agendamento)
+}
+
+func withoutTriage(motive string) string {
+	if index := strings.Index(motive, "[TRIAGEM]"); index >= 0 {
+		return strings.TrimSpace(motive[:index])
+	}
+	return motive
+}
+
+// UpdateTriage records triage information without exposing the general appointment update path.
+func (h *AgendamentoHandler) UpdateTriage(c *gin.Context) {
+	userClinicaID, err := getClinicaIDFromContext(c)
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Clinic not identified"})
+		return
+	}
+	var input UpdateTriageInput
+	if err := c.ShouldBindJSON(&input); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	var appointment models.Agendamento
+	if err := h.DB.First(&appointment, c.Param("id")).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Agendamento not found"})
+		return
+	}
+	if userRole := getUserRoleFromContext(c); userRole != "ADMIN_TOTAL" && appointment.ClinicaID != userClinicaID {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Agendamento not found"})
+		return
+	}
+	appointment.Motivo = input.MotivoConsulta
+	appointment.Status = input.Status
+	if err := h.DB.Save(&appointment).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save triage"})
+		return
+	}
+	c.JSON(http.StatusOK, appointment)
 }
 
 // UpdateStatus godoc
@@ -330,6 +388,9 @@ func (h *AgendamentoHandler) UpdateStatus(c *gin.Context) {
 	if err := h.DB.Save(&agendamento).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update status"})
 		return
+	}
+	if userRole == "RECEPCIONISTA" {
+		agendamento.Motivo = withoutTriage(agendamento.Motivo)
 	}
 
 	c.JSON(http.StatusOK, agendamento)

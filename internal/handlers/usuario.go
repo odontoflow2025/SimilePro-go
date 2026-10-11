@@ -31,6 +31,8 @@ func (h *UsuarioHandler) Create(c *gin.Context) {
 		Senha       string `json:"senha" binding:"required"`
 		Role        string `json:"role"`
 		CPF         string `json:"cpf"`
+		Telefone    string `json:"telefone"`
+		ClinicaID   uint   `json:"clinicaId"`
 	}
 	if err := c.ShouldBindJSON(&input); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Dados inválidos: " + err.Error()})
@@ -50,37 +52,61 @@ func (h *UsuarioHandler) Create(c *gin.Context) {
 		}
 	}
 
-    // Role mapping (frontend sends 'role', backend uses 'TipoUsuario')
-    tipoUsuario := input.Role
-    if tipoUsuario == "" {
-        tipoUsuario = "FUNCIONARIO"
-    }
+	// The clinic admin may create clinic staff, but only the network admin may
+	// grant network-wide administration.
+	actorRole, _ := c.Get("userRole")
+	allowedRoles := map[string]bool{}
+	switch actorRole {
+	case "ADMIN_TOTAL":
+		for _, role := range []string{"RECEPCIONISTA", "TECNICO", "DENTISTA", "RH", "ADMINISTRATIVO", "FINANCEIRO", "FATURISTA", "ADMIN_GERENCIAL", "ADMIN_TOTAL"} {
+			allowedRoles[role] = true
+		}
+	case "ADMIN_GERENCIAL":
+		for _, role := range []string{"RECEPCIONISTA", "TECNICO", "DENTISTA", "RH", "ADMINISTRATIVO", "FINANCEIRO", "FATURISTA", "ADMIN_GERENCIAL"} {
+			allowedRoles[role] = true
+		}
+	case "RH":
+		allowedRoles["FUNCIONARIO"] = true
+	}
+	if !allowedRoles[input.Role] {
+		c.JSON(http.StatusForbidden, gin.H{"error": "Perfil de acesso inválido ou não permitido para este administrador"})
+		return
+	}
 
-    clinicaIDVal, exists := c.Get("clinicaID")
-    if !exists {
-        c.JSON(http.StatusForbidden, gin.H{"error": "Sessão sem clínica vinculada. Selecione uma clínica primeiro."})
-        return
-    }
-    
-    clinicaID, ok := clinicaIDVal.(uint)
-    if !ok {
-        c.JSON(http.StatusInternalServerError, gin.H{"error": "Falha na identificação da clínica no sistema"})
-        return
-    }
+	clinicaIDVal, exists := c.Get("clinicaID")
+	clinicaID, ok := clinicaIDVal.(uint)
+	if actorRole == "ADMIN_TOTAL" && input.ClinicaID > 0 {
+		clinicaID = input.ClinicaID
+		ok = true
+	}
+	if !exists && !(actorRole == "ADMIN_TOTAL" && input.ClinicaID > 0) {
+		c.JSON(http.StatusForbidden, gin.H{"error": "Sessão sem clínica vinculada. Selecione uma clínica primeiro."})
+		return
+	}
+	if !ok {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Falha na identificação da clínica no sistema"})
+		return
+	}
+	var clinic models.Clinica
+	if err := h.DB.First(&clinic, clinicaID).Error; err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Clínica de vínculo não encontrada"})
+		return
+	}
 
 	user := models.User{
 		Nome:        input.Nome,
 		Email:       input.Email,
-		TipoUsuario: tipoUsuario,
+		TipoUsuario: input.Role,
         ClinicaID:   clinicaID,
         CPF:         input.CPF,
+		Telefone:    input.Telefone,
 	}
     
-    // Set Password
-    if err := user.SetPassword(input.Senha); err != nil {
-        c.JSON(http.StatusInternalServerError, gin.H{"error": "Erro ao processar senha: " + err.Error()})
-        return
-    }
+	// Set Password
+	if err := user.SetPassword(input.Senha); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Erro ao processar senha: " + err.Error()})
+		return
+	}
 
 	if err := h.DB.Create(&user).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Erro ao salvar usuário no banco: " + err.Error()})
@@ -116,7 +142,7 @@ func (h *UsuarioHandler) FindAll(c *gin.Context) {
 		}
 	} else {
 		// Restricted to their own clinic
-		query = query.Where("clinica_id = ?", userClinicaID)
+		query = query.Where("clinica_id = ? AND tipo_usuario <> ?", userClinicaID, "ADMIN_TOTAL")
 	}
 
 	var usuarios []models.User
@@ -151,8 +177,18 @@ func (h *UsuarioHandler) Update(c *gin.Context) {
 		c.JSON(http.StatusNotFound, gin.H{"error": "User not found"})
 		return
 	}
+	actorRole, _ := c.Get("userRole")
+	actorClinicIDRaw, _ := c.Get("clinicaID")
+	actorClinicID, actorHasClinic := actorClinicIDRaw.(uint)
+	if actorRole != "ADMIN_TOTAL" && (!actorHasClinic || user.TipoUsuario == "ADMIN_TOTAL" || user.ClinicaID != actorClinicID) {
+		c.JSON(http.StatusForbidden, gin.H{"error": "Acesso negado: usuário fora do escopo administrativo desta clínica"})
+		return
+	}
 
-	h.DB.Model(&user).Updates(models.User{Nome: input.Nome, Telefone: input.Telefone})
+	if err := h.DB.Model(&user).Updates(models.User{Nome: input.Nome, Telefone: input.Telefone}).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Falha ao atualizar usuário"})
+		return
+	}
 	c.JSON(http.StatusOK, user)
 }
 
@@ -169,6 +205,13 @@ func (h *UsuarioHandler) Delete(c *gin.Context) {
 	var user models.User
 	if err := h.DB.First(&user, id).Error; err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "User not found"})
+		return
+	}
+	actorRole, _ := c.Get("userRole")
+	actorClinicIDRaw, _ := c.Get("clinicaID")
+	actorClinicID, actorHasClinic := actorClinicIDRaw.(uint)
+	if actorRole != "ADMIN_TOTAL" && (!actorHasClinic || user.TipoUsuario == "ADMIN_TOTAL" || user.ClinicaID != actorClinicID) {
+		c.JSON(http.StatusForbidden, gin.H{"error": "Acesso negado: usuário fora do escopo administrativo desta clínica"})
 		return
 	}
 

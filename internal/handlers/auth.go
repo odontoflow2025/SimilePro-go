@@ -70,11 +70,12 @@ func (h *AuthHandler) Register(c *gin.Context) {
 		return
 	}
 
-	// Security check for role
+	// Keep open registration at the default operational level. Staff roles are
+	// created through the protected user-management endpoint.
 	tipoUsuario := input.TipoUsuario
-	// For public registration, block internal admin roles
-	if tipoUsuario == "ADMIN_TOTAL" || tipoUsuario == "ADMIN_GERENCIAL" || tipoUsuario == "" {
-		tipoUsuario = "RECEPCIONISTA" // Default to lower privilege
+	switch tipoUsuario {
+	case "ADMIN", "ADMIN_TOTAL", "ADMIN_GERENCIAL", "ADMINISTRATIVO", "RH", "FINANCEIRO", "FATURISTA", "DENTISTA", "TECNICO", "ASSISTENTE", "":
+		tipoUsuario = "RECEPCIONISTA"
 	}
 
 	user := models.User{
@@ -122,7 +123,9 @@ func (h *AuthHandler) Login(c *gin.Context) {
         return
     }
 
-    // Generate JWT
+    // Generate a one-hour absolute session.
+    issuedAt := time.Now()
+    sessionTTL := time.Hour
     token := jwt.NewWithClaims(jwt.SigningMethodRS256, jwt.MapClaims{
         "jti":         uuid.New().String(),
         "sub":         user.ID,
@@ -130,7 +133,8 @@ func (h *AuthHandler) Login(c *gin.Context) {
         "email":       user.Email,
         "tipoUsuario": user.TipoUsuario,
         "clinicaId":   user.ClinicaID,
-        "exp":         time.Now().Add(time.Hour * 24).Unix(),
+        "iat":         issuedAt.Unix(),
+        "exp":         issuedAt.Add(sessionTTL).Unix(),
     })
 
     privateKeyBytes, err := os.ReadFile("private.pem")
@@ -151,12 +155,13 @@ func (h *AuthHandler) Login(c *gin.Context) {
     }
 
     // Set JWT as HttpOnly Cookie
-    maxAge := 86400 
+    maxAge := int(sessionTTL.Seconds())
     
     http.SetCookie(c.Writer, &http.Cookie{
         Name:     "auth_token",
         Value:    tokenString,
         MaxAge:   maxAge,
+        Expires:  issuedAt.Add(sessionTTL),
         Path:     "/",
         Domain:   "",
         Secure:   true, // SameSiteNone requires Secure: true

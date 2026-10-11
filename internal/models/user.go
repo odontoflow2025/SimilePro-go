@@ -14,7 +14,7 @@ type User struct {
 	SenhaHash   string         `gorm:"not null" json:"-"`
 	Telefone    string         `json:"telefone"`
 	CPF         string         `gorm:"uniqueIndex;not null" json:"cpf"`
-	TipoUsuario string         `gorm:"not null" json:"tipoUsuario"` // ADMIN_TOTAL, ADMIN_GERENCIAL, DENTISTA, RECEPCIONISTA, ASSISTENTE, FATURISTA
+	TipoUsuario string         `gorm:"not null" json:"tipoUsuario"` // ADMIN_TOTAL, ADMIN_GERENCIAL, ADMINISTRATIVO, RH, DENTISTA, TECNICO, RECEPCIONISTA, FATURISTA
 	ClinicaID   uint           `json:"clinicaId"`
 	Clinica     *Clinica       `gorm:"foreignKey:ClinicaID" json:"clinica,omitempty"`
 	CreatedAt   time.Time      `json:"createdAt"`

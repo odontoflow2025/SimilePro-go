@@ -1,11 +1,11 @@
 package routes
 
 import (
-	"net/http"
 	"SimilePro-go/internal/config"
 	"SimilePro-go/internal/handlers"
 	"SimilePro-go/internal/middleware"
 	"SimilePro-go/internal/repository"
+	"net/http"
 
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
@@ -17,296 +17,302 @@ import (
 )
 
 func SetupRoutes(r *gin.Engine, db *gorm.DB, cfg *config.Config) {
-    // Middleware
-    r.Use(middleware.CORSMiddleware())
-    r.Use(middleware.TimezoneInjector())
+	// Middleware
+	r.Use(middleware.CORSMiddleware())
+	r.Use(middleware.TimezoneInjector())
 
-    // Handlers
-    authHandler := handlers.NewAuthHandler(db, cfg.JWTSecret)
-    clinicaHandler := handlers.NewClinicaHandler(db)
-    dentistaHandler := handlers.NewDentistaHandler(db)
-    pacienteHandler := handlers.NewPacienteHandler(db)
-    funcionarioHandler := handlers.NewFuncionarioHandler(db)
-    procedimentoHandler := handlers.NewProcedimentoHandler(db)
-    agendamentoHandler := handlers.NewAgendamentoHandler(db)
-    planoTratamentoHandler := handlers.NewPlanoTratamentoHandler(db)
-    evolucaoHandler := handlers.NewEvolucaoHandler(db)
-    anamneseHandler := handlers.NewAnamneseHandler(db)
-    convenioHandler := handlers.NewConvenioHandler(db)
-    transacaoHandler := handlers.NewTransacaoHandler(db)
-    faturaHandler := handlers.NewFaturaHandler(db)
-    contabilidadeHandler := handlers.NewContabilidadeHandler(db)
-    estoqueHandler := handlers.NewEstoqueHandler(db)
-    usuarioHandler := handlers.NewUsuarioHandler(db)
-    fiscalHandler := handlers.NewFiscalHandler(db)
-    rhFinanceiroHandler := handlers.NewRHFinanceiroHandler(db)
-    
-    configRepository := repository.NewConfiguracaoRepository(db)
-    configuracaoHandler := handlers.NewConfiguracaoHandler(configRepository)
+	// Handlers
+	authHandler := handlers.NewAuthHandler(db, cfg.JWTSecret)
+	clinicaHandler := handlers.NewClinicaHandler(db)
+	dentistaHandler := handlers.NewDentistaHandler(db)
+	pacienteHandler := handlers.NewPacienteHandler(db)
+	funcionarioHandler := handlers.NewFuncionarioHandler(db)
+	procedimentoHandler := handlers.NewProcedimentoHandler(db)
+	agendamentoHandler := handlers.NewAgendamentoHandler(db)
+	planoTratamentoHandler := handlers.NewPlanoTratamentoHandler(db)
+	evolucaoHandler := handlers.NewEvolucaoHandler(db)
+	anamneseHandler := handlers.NewAnamneseHandler(db)
+	convenioHandler := handlers.NewConvenioHandler(db)
+	transacaoHandler := handlers.NewTransacaoHandler(db)
+	faturaHandler := handlers.NewFaturaHandler(db)
+	contabilidadeHandler := handlers.NewContabilidadeHandler(db)
+	estoqueHandler := handlers.NewEstoqueHandler(db)
+	usuarioHandler := handlers.NewUsuarioHandler(db)
+	fiscalHandler := handlers.NewFiscalHandler(db)
+	rhFinanceiroHandler := handlers.NewRHFinanceiroHandler(db)
 
-    // Routes
-    api := r.Group("/api")
-    {
-        // Swagger documentation
-        api.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerFiles.Handler))
-        auth := api.Group("/auth")
-        {
-            auth.POST("/login", middleware.LoginRateLimiter(), authHandler.Login)
-            auth.POST("/logout", authHandler.Logout)
-            auth.POST("/signup", authHandler.Register)
-        }
+	configRepository := repository.NewConfiguracaoRepository(db)
+	configuracaoHandler := handlers.NewConfiguracaoHandler(configRepository)
 
-        // Webhooks (Unprotected by JWT, validated internally by signature)
-        webhooks := api.Group("/webhooks")
-        {
-            webhooks.POST("/dock/payment", handlers.HandleDockWebhook(db))
-        }
+	// Routes
+	api := r.Group("/api")
+	{
+		// Swagger documentation
+		api.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerFiles.Handler))
+		auth := api.Group("/auth")
+		{
+			auth.POST("/login", middleware.LoginRateLimiter(), authHandler.Login)
+			auth.POST("/logout", authHandler.Logout)
+			auth.POST("/signup", authHandler.Register)
+		}
 
-        // Public Support Routes
-        ticketHandler := handlers.NewTicketHandler(db)
-        api.POST("/tickets", ticketHandler.CreateTicket)
+		// Webhooks (Unprotected by JWT, validated internally by signature)
+		webhooks := api.Group("/webhooks")
+		{
+			webhooks.POST("/dock/payment", handlers.HandleDockWebhook(db))
+		}
 
-        // Protected routes
-        protected := api.Group("")
-        
-        // 1. Instancia o AuthProvider UMA VEZ lendo do disco
-        authProvider := middleware.NewAuthProvider("public.pem")
-        
-        // 2. Injeta o middleware baseado em memória
-        protected.Use(authProvider.AuthMiddleware())
-        
-        protected.Use(middleware.TenantDBMiddleware(db)) // Add Tenant Isolation Middleware
-        protected.Use(middleware.AuditMiddleware(db)) // Add Audit Middleware
-        {
-            clinicas := protected.Group("/clinicas")
-            {
-                clinicas.POST("", middleware.RequireRole(db, "ADMIN_TOTAL", "ADMIN_GERENCIAL"), clinicaHandler.Create)
-                clinicas.GET("", clinicaHandler.FindAll)
-                clinicas.GET("/rede", clinicaHandler.GetRede)
-                clinicas.GET("/:id", clinicaHandler.FindOne)
-            }
+		// Public Support Routes
+		ticketHandler := handlers.NewTicketHandler(db)
+		api.POST("/tickets", ticketHandler.CreateTicket)
 
-            dentistas := protected.Group("/dentistas")
-            {
-                dentistas.POST("", dentistaHandler.Create)
-                dentistas.GET("", dentistaHandler.FindAll)
-            }
+		// Protected routes
+		protected := api.Group("")
 
-            pacientes := protected.Group("/pacientes")
-            pacientes.Use(middleware.RequireRole(db, "ADMIN_TOTAL", "ADMIN_GERENCIAL", "DENTISTA", "RECEPCIONISTA", "ASSISTENTE"))
-            {
-                pacientes.POST("", pacienteHandler.Create)
-                pacientes.GET("", pacienteHandler.FindAll)
-                pacientes.GET("/:id", pacienteHandler.FindOne)
+		// 1. Instancia o AuthProvider UMA VEZ lendo do disco
+		authProvider := middleware.NewAuthProvider("public.pem")
 
-                // Alertas de Saúde
-                alertaHandler := handlers.NewAlertaHandler(db)
-                pacientes.POST("/:id/alertas", alertaHandler.Create)
-                pacientes.GET("/:id/alertas", alertaHandler.FindByPaciente)
-                pacientes.DELETE("/:id/alertas/:alertaId", alertaHandler.Delete)
+		// 2. Injeta o middleware baseado em memória
+		protected.Use(authProvider.AuthMiddleware())
 
-                // Audit Protocol
-                pacientes.POST("/protocolo-acesso", pacienteHandler.GerarProtocolo)
-            }
+		protected.Use(middleware.TenantDBMiddleware(db)) // Add Tenant Isolation Middleware
+		protected.Use(middleware.AuditMiddleware(db))    // Add Audit Middleware
+		{
+			operationalRoles := []string{"ADMIN_TOTAL", "ADMIN_GERENCIAL", "DENTISTA", "RECEPCIONISTA", "TECNICO"}
+			clinicAdminRoles := []string{"ADMIN_TOTAL", "ADMIN_GERENCIAL"}
+			financialRoles := []string{"ADMIN_TOTAL", "ADMIN_GERENCIAL", "ADMINISTRATIVO", "FINANCEIRO", "FATURISTA"}
 
-            funcionarios := protected.Group("/funcionarios")
-            funcionarios.Use(middleware.RequireRole(db, "ADMIN_TOTAL", "ADMIN_GERENCIAL"))
-            {
-                funcionarios.POST("", funcionarioHandler.Create)
-                funcionarios.GET("", funcionarioHandler.FindAll)
-                funcionarios.PATCH("/:id/demitir", funcionarioHandler.Demitir)
-            }
+			clinicas := protected.Group("/clinicas")
+			{
+				clinicas.POST("", middleware.RequireRole(db, "ADMIN_TOTAL"), clinicaHandler.Create)
+				clinicas.GET("", middleware.RequireRole(db, "ADMIN_TOTAL", "ADMIN_GERENCIAL", "ADMINISTRATIVO", "FINANCEIRO", "FATURISTA"), clinicaHandler.FindAll)
+				clinicas.GET("/rede", middleware.RequireRole(db, "ADMIN_TOTAL"), clinicaHandler.GetRede)
+				clinicas.GET("/:id", middleware.RequireRole(db, clinicAdminRoles...), clinicaHandler.FindOne)
+			}
 
-            // Recursos Humanos e Folha
-            folhaHandler := handlers.NewFolhaHandler(db)
-            rh := protected.Group("/rh")
-            rh.Use(middleware.RequireRole(db, "ADMIN_TOTAL", "ADMIN_GERENCIAL"))
-            {
-                rh.POST("/folha/processar", folhaHandler.ProcessarFolha)
-                rh.GET("/folha", folhaHandler.GetHolerites)
-                
-                // Gestão Dinâmica de Rubricas
-                rh.GET("/rubricas", folhaHandler.GetRubricas)
-                rh.POST("/rubricas", folhaHandler.CreateRubrica)
-            }
+			dentistas := protected.Group("/dentistas")
+			{
+				dentistas.POST("", middleware.RequireRole(db, clinicAdminRoles...), dentistaHandler.Create)
+				dentistas.GET("", middleware.RequireRole(db, operationalRoles...), dentistaHandler.FindAll)
+			}
 
-            usuarios := protected.Group("/usuarios")
-            usuarios.Use(middleware.RequireRole(db, "ADMIN_TOTAL", "ADMIN_GERENCIAL", "RH"))
-            {
-                usuarios.POST("", usuarioHandler.Create)
-                usuarios.GET("", usuarioHandler.FindAll)
-                usuarios.PATCH("/:id", usuarioHandler.Update)
-                usuarios.DELETE("/:id", usuarioHandler.Delete)
-            }
+			pacientes := protected.Group("/pacientes")
+			pacientes.Use(middleware.RequireRole(db, "ADMIN_TOTAL", "ADMIN_GERENCIAL", "DENTISTA", "RECEPCIONISTA", "TECNICO", "ASSISTENTE"))
+			{
+				pacientes.POST("", pacienteHandler.Create)
+				pacientes.GET("", pacienteHandler.FindAll)
+				pacientes.GET("/:id", pacienteHandler.FindOne)
 
-            procedimentos := protected.Group("/procedimentos")
-            {
-                procedimentos.POST("", procedimentoHandler.Create)
-                procedimentos.GET("", procedimentoHandler.FindAll)
-            }
+				// Alertas de Saúde
+				alertaHandler := handlers.NewAlertaHandler(db)
+				patientClinicalRoles := middleware.RequireRole(db, "ADMIN_TOTAL", "ADMIN_GERENCIAL", "DENTISTA", "TECNICO")
+				pacientes.POST("/:id/alertas", patientClinicalRoles, alertaHandler.Create)
+				pacientes.GET("/:id/alertas", patientClinicalRoles, alertaHandler.FindByPaciente)
+				pacientes.DELETE("/:id/alertas/:alertaId", patientClinicalRoles, alertaHandler.Delete)
 
-            agendamentos := protected.Group("/agendamentos")
-            agendamentos.Use(middleware.RequireRole(db, "ADMIN_TOTAL", "ADMIN_GERENCIAL", "DENTISTA", "RECEPCIONISTA", "ASSISTENTE"))
-            {
-                agendamentos.POST("", agendamentoHandler.Create)
-                agendamentos.GET("", agendamentoHandler.FindAll)
-                agendamentos.GET("/:id", agendamentoHandler.FindOne)
-                agendamentos.PATCH("/:id", agendamentoHandler.Update)
-                agendamentos.PATCH("/:id/status", agendamentoHandler.UpdateStatus)
-                agendamentos.DELETE("/:id", agendamentoHandler.Delete)
-            }
+				// Audit Protocol
+				pacientes.POST("/protocolo-acesso", middleware.RequireRole(db, "ADMIN_TOTAL", "ADMIN_GERENCIAL", "DENTISTA"), pacienteHandler.GerarProtocolo)
+			}
 
-            v1 := protected.Group("/v1")
-            {
-                v1.GET("/profissionais", dentistaHandler.GetProfissionaisAgenda)
-                v1.GET("/agendamentos", middleware.RequireRole(db, "ADMIN_TOTAL", "ADMIN_GERENCIAL", "DENTISTA", "RECEPCIONISTA", "ASSISTENTE"), agendamentoHandler.FindAll)
+			funcionarios := protected.Group("/funcionarios")
+			funcionarios.Use(middleware.RequireRole(db, "ADMIN_TOTAL", "ADMIN_GERENCIAL", "RH"))
+			{
+				funcionarios.POST("", funcionarioHandler.Create)
+				funcionarios.GET("", funcionarioHandler.FindAll)
+				funcionarios.PATCH("/:id/demitir", funcionarioHandler.Demitir)
+			}
 
-                // Perimeter RH - Strict RBAC
-                rh := v1.Group("/rh")
-                rh.Use(middleware.AdminAuthMiddleware("ADMIN", "RH"))
-                {
-                    rh.POST("/funcionario", rhFinanceiroHandler.SaveFuncionario)
-                    rh.POST("/folha/ajuste", rhFinanceiroHandler.AplicarAjusteManual)
-                    rh.GET("/folha/exportar/:holerite_id", rhFinanceiroHandler.ExportarHolerite)
-                }
+			// Recursos Humanos e Folha
+			folhaHandler := handlers.NewFolhaHandler(db)
+			rh := protected.Group("/rh")
+			rh.Use(middleware.RequireRole(db, "ADMIN_TOTAL", "ADMIN_GERENCIAL", "RH"))
+			{
+				rh.POST("/folha/processar", folhaHandler.ProcessarFolha)
+				rh.GET("/folha", folhaHandler.GetHolerites)
 
-                // Perimeter Financeiro - Strict RBAC
-                fin := v1.Group("/financeiro")
-                fin.Use(middleware.AdminAuthMiddleware("ADMIN", "FINANCEIRO", "RH"))
-                {
-                    fin.POST("/folha/fechamento", rhFinanceiroHandler.FecharFolhaEFiscal)
-                }
-            }
+				// Gestão Dinâmica de Rubricas
+				rh.GET("/rubricas", folhaHandler.GetRubricas)
+				rh.POST("/rubricas", folhaHandler.CreateRubrica)
+			}
 
-            planos := protected.Group("/planos-tratamento")
-            planos.Use(middleware.RequireRole(db, "ADMIN_TOTAL", "ADMIN_GERENCIAL", "DENTISTA", "ASSISTENTE"))
-            {
-                planos.POST("", planoTratamentoHandler.Create)
-                planos.GET("", planoTratamentoHandler.FindAll)
-                planos.GET("/:id", planoTratamentoHandler.FindOne)
-                planos.PATCH("/:id/status", planoTratamentoHandler.UpdateStatus)
-            }
+			usuarios := protected.Group("/usuarios")
+			{
+				usuarios.POST("", middleware.RequireRole(db, clinicAdminRoles...), usuarioHandler.Create)
+				usuarios.POST("/funcionario", middleware.RequireRole(db, "RH"), usuarioHandler.Create)
+				usuarios.GET("", middleware.RequireRole(db, clinicAdminRoles...), usuarioHandler.FindAll)
+				usuarios.PATCH("/:id", middleware.RequireRole(db, clinicAdminRoles...), usuarioHandler.Update)
+				usuarios.DELETE("/:id", middleware.RequireRole(db, clinicAdminRoles...), usuarioHandler.Delete)
+			}
 
-            evolucoes := protected.Group("/evolucoes")
-            evolucoes.Use(middleware.RequireRole(db, "ADMIN_TOTAL", "ADMIN_GERENCIAL", "DENTISTA", "ASSISTENTE"))
-            {
-                evolucoes.POST("", evolucaoHandler.Create)
-                evolucoes.GET("", evolucaoHandler.FindAll)
-            }
+			procedimentos := protected.Group("/procedimentos")
+			{
+				procedimentos.POST("", middleware.RequireRole(db, clinicAdminRoles...), procedimentoHandler.Create)
+				procedimentos.GET("", middleware.RequireRole(db, operationalRoles...), procedimentoHandler.FindAll)
+			}
 
-            convenios := protected.Group("/convenios")
-            {
-                convenios.POST("", convenioHandler.Create)
-                convenios.GET("", convenioHandler.FindAll)
-            }
+			agendamentos := protected.Group("/agendamentos")
+			agendamentos.Use(middleware.RequireRole(db, "ADMIN_TOTAL", "ADMIN_GERENCIAL", "DENTISTA", "RECEPCIONISTA", "TECNICO", "ASSISTENTE"))
+			{
+				agendamentos.POST("", agendamentoHandler.Create)
+				agendamentos.GET("", agendamentoHandler.FindAll)
+				agendamentos.GET("/:id", agendamentoHandler.FindOne)
+				agendamentos.PATCH("/:id/triagem", middleware.RequireRole(db, "ADMIN_TOTAL", "ADMIN_GERENCIAL", "DENTISTA", "TECNICO", "ASSISTENTE"), agendamentoHandler.UpdateTriage)
+				agendamentos.PATCH("/:id", agendamentoHandler.Update)
+				agendamentos.PATCH("/:id/status", agendamentoHandler.UpdateStatus)
+				agendamentos.DELETE("/:id", agendamentoHandler.Delete)
+			}
 
-            transacoes := protected.Group("/transacoes-financeiras")
-            transacoes.Use(middleware.RequireRole(db, "ADMIN_TOTAL", "ADMIN_GERENCIAL", "FATURISTA"))
-            {
-                transacoes.POST("", transacaoHandler.Create)
-                transacoes.GET("", transacaoHandler.FindAll)
-                transacoes.GET("/resumo", transacaoHandler.GetSummary)
-                transacoes.PATCH("/:id/status", transacaoHandler.UpdateStatus)
-            }
+			v1 := protected.Group("/v1")
+			{
+				v1.GET("/profissionais", middleware.RequireRole(db, operationalRoles...), dentistaHandler.GetProfissionaisAgenda)
+				v1.GET("/agendamentos", middleware.RequireRole(db, "ADMIN_TOTAL", "ADMIN_GERENCIAL", "DENTISTA", "RECEPCIONISTA", "TECNICO", "ASSISTENTE"), agendamentoHandler.FindAll)
 
-            faturas := protected.Group("/faturamento/faturas")
-            faturas.Use(middleware.RequireRole(db, "ADMIN_TOTAL", "ADMIN_GERENCIAL", "FATURISTA"))
-            {
-                faturas.POST("", faturaHandler.Create)
-                faturas.GET("", faturaHandler.FindAll)
-                faturas.GET("/atrasadas", faturaHandler.GetAtrasadas)
-                faturas.POST("/:id/pagar", faturaHandler.PagarFatura)
-                faturas.POST("/:id/cancelar", faturaHandler.CancelarFatura)
-            }
+				// Perimeter RH - Strict RBAC
+				rh := v1.Group("/rh")
+				rh.Use(middleware.RequireRole(db, "ADMIN_TOTAL", "ADMIN_GERENCIAL", "RH"))
+				{
+					rh.POST("/funcionario", rhFinanceiroHandler.SaveFuncionario)
+					rh.POST("/folha/ajuste", rhFinanceiroHandler.AplicarAjusteManual)
+					rh.GET("/folha/exportar/:holerite_id", rhFinanceiroHandler.ExportarHolerite)
+				}
 
-            contabilidade := protected.Group("/contabilidade")
-            contabilidade.Use(middleware.RequireRole(db, "ADMIN_TOTAL", "ADMIN_GERENCIAL", "FATURISTA"))
-            {
-                contabilidade.POST("/centros-custo", contabilidadeHandler.CreateCentroCusto)
-                contabilidade.GET("/centros-custo", contabilidadeHandler.FindAllCentrosCusto)
+				// Perimeter Financeiro - Strict RBAC
+				fin := v1.Group("/financeiro")
+				fin.Use(middleware.RequireRole(db, "ADMIN_TOTAL", "ADMIN_GERENCIAL", "RH"))
+				{
+					fin.POST("/folha/fechamento", rhFinanceiroHandler.FecharFolhaEFiscal)
+				}
+			}
 
-                contabilidade.POST("/plano-contas", contabilidadeHandler.CreateConta)
-                contabilidade.GET("/plano-contas", contabilidadeHandler.FindAllContas)
-                contabilidade.GET("/plano-contas/estrutura", contabilidadeHandler.GetEstrutura)
-                
-                // Dashboard routes
-                contabilidade.GET("/dashboard/fluxo-caixa", contabilidadeHandler.GetFluxoCaixa)
-                contabilidade.GET("/dashboard/bi-metrics", contabilidadeHandler.GetBIDashboard)
-                contabilidade.GET("/dre/mensal", contabilidadeHandler.GetDREMensal)
-            }
+			planos := protected.Group("/planos-tratamento")
+			planos.Use(middleware.RequireRole(db, "ADMIN_TOTAL", "ADMIN_GERENCIAL", "DENTISTA"))
+			{
+				planos.POST("", planoTratamentoHandler.Create)
+				planos.GET("", planoTratamentoHandler.FindAll)
+				planos.GET("/:id", planoTratamentoHandler.FindOne)
+				planos.PATCH("/:id/status", planoTratamentoHandler.UpdateStatus)
+			}
 
-            fiscal := protected.Group("/fiscal")
-            {
-                fiscal.GET("/nfs", fiscalHandler.GetNotasFiscais)
-                fiscal.POST("/nfs/emitir", fiscalHandler.EmitirNotaFiscal)
-            }
+			evolucoes := protected.Group("/evolucoes")
+			evolucoes.Use(middleware.RequireRole(db, "ADMIN_TOTAL", "ADMIN_GERENCIAL", "DENTISTA"))
+			{
+				evolucoes.POST("", evolucaoHandler.Create)
+				evolucoes.GET("", evolucaoHandler.FindAll)
+			}
 
-            estoque := protected.Group("/estoque")
-            estoque.Use(middleware.RequireRole(db, "ADMIN_TOTAL", "ADMIN_GERENCIAL", "RECEPCIONISTA", "ASSISTENTE"))
-            {
-                estoque.GET("/produtos", estoqueHandler.GetProdutos)
-                estoque.GET("/notas-fiscais", estoqueHandler.GetNotasFiscais)
-                estoque.POST("/notas-fiscais", estoqueHandler.CreateNotaFiscal)
-            }
-            
-            // Faturamento Reports/Extras
-            faturamento := protected.Group("/faturamento")
-            {
-               faturamento.GET("/relatorios/faturamento", func(c *gin.Context) {
-                   c.JSON(http.StatusOK, gin.H{}) // Mock report
-               }) 
-            }
+			convenios := protected.Group("/convenios")
+			{
+				convenios.POST("", middleware.RequireRole(db, clinicAdminRoles...), convenioHandler.Create)
+				convenios.GET("", middleware.RequireRole(db, operationalRoles...), convenioHandler.FindAll)
+			}
 
-            adminHandler := handlers.NewAdminHandler(db)
-            admin := protected.Group("/administracao")
-            admin.Use(middleware.RequireRole(db, "ADMIN_TOTAL"))
-            {
-                admin.GET("/estatisticas", adminHandler.GetStats)
-                admin.GET("/configuracoes", adminHandler.ListConfigs)
-                admin.GET("/configuracoes/:chave", adminHandler.GetConfig)
-                admin.PUT("/configuracoes/:chave", adminHandler.SetConfig)
-                admin.GET("/logs", adminHandler.GetLogs)
-            }
+			transacoes := protected.Group("/transacoes-financeiras")
+			transacoes.Use(middleware.RequireRole(db, financialRoles...))
+			{
+				transacoes.POST("", transacaoHandler.Create)
+				transacoes.GET("", transacaoHandler.FindAll)
+				transacoes.GET("/resumo", transacaoHandler.GetSummary)
+				transacoes.PATCH("/:id/status", transacaoHandler.UpdateStatus)
+			}
 
-            configuracoes := protected.Group("/configuracoes")
-            configuracoes.Use(middleware.RequireRole(db, "ADMIN_TOTAL", "ADMIN_GERENCIAL"))
-            {
-                configuracoes.GET("", configuracaoHandler.GetAgregado)
-                configuracoes.PUT("/geral", configuracaoHandler.UpdateGeral)
-                configuracoes.POST("/salas", configuracaoHandler.CreateSala)
-                configuracoes.PUT("/salas/:id", configuracaoHandler.UpdateSala)
-                configuracoes.DELETE("/salas/:id", configuracaoHandler.DeleteSala)
-                configuracoes.POST("/integracoes", configuracaoHandler.CreateIntegracao)
-                configuracoes.PUT("/integracoes/:id", configuracaoHandler.UpdateIntegracao)
-                configuracoes.DELETE("/integracoes/:id", configuracaoHandler.DeleteIntegracao)
-            }
+			faturas := protected.Group("/faturamento/faturas")
+			faturas.Use(middleware.RequireRole(db, financialRoles...))
+			{
+				faturas.POST("", faturaHandler.Create)
+				faturas.GET("", faturaHandler.FindAll)
+				faturas.GET("/atrasadas", faturaHandler.GetAtrasadas)
+				faturas.POST("/:id/pagar", faturaHandler.PagarFatura)
+				faturas.POST("/:id/cancelar", faturaHandler.CancelarFatura)
+			}
 
+			contabilidade := protected.Group("/contabilidade")
+			contabilidade.Use(middleware.RequireRole(db, financialRoles...))
+			{
+				contabilidade.POST("/centros-custo", contabilidadeHandler.CreateCentroCusto)
+				contabilidade.GET("/centros-custo", contabilidadeHandler.FindAllCentrosCusto)
 
+				contabilidade.POST("/plano-contas", contabilidadeHandler.CreateConta)
+				contabilidade.GET("/plano-contas", contabilidadeHandler.FindAllContas)
+				contabilidade.GET("/plano-contas/estrutura", contabilidadeHandler.GetEstrutura)
 
-            // Assinaturas (SaaS)
-            assinaturaHandler := handlers.NewAssinaturaHandler(db)
-            assinaturas := protected.Group("/assinaturas")
-            {
-                assinaturas.GET("/planos", assinaturaHandler.GetPlanos)
-                assinaturas.GET("/status", assinaturaHandler.GetStatus)
-                assinaturas.POST("/", middleware.RequireRole(db, "ADMIN_TOTAL"), assinaturaHandler.Assinar)
-            }
+				// Dashboard routes
+				contabilidade.GET("/dashboard/fluxo-caixa", contabilidadeHandler.GetFluxoCaixa)
+				contabilidade.GET("/dashboard/bi-metrics", contabilidadeHandler.GetBIDashboard)
+				contabilidade.GET("/dre/mensal", contabilidadeHandler.GetDREMensal)
+			}
 
-            protected.POST("/pacientes/:id/anamnese", anamneseHandler.CreateOrUpdate)
-            protected.GET("/pacientes/:id/anamnese", anamneseHandler.FindByPaciente)
+			fiscal := protected.Group("/fiscal")
+			fiscal.Use(middleware.RequireRole(db, financialRoles...))
+			{
+				fiscal.GET("/nfs", fiscalHandler.GetNotasFiscais)
+				fiscal.POST("/nfs/emitir", fiscalHandler.EmitirNotaFiscal)
+			}
 
-            // RNDS Integration
-            rndsHandler := handlers.NewRndsHandler(db)
-            rnds := protected.Group("/rnds")
-            {
-                rnds.GET("/status", rndsHandler.CheckStatus)
-                rnds.POST("/patients/:id", rndsHandler.SendPatient)
-                rnds.POST("/attendances/:id", rndsHandler.SendAttendance)
-            }
+			estoque := protected.Group("/estoque")
+			estoque.Use(middleware.RequireRole(db, clinicAdminRoles...))
+			{
+				estoque.GET("/produtos", estoqueHandler.GetProdutos)
+				estoque.GET("/notas-fiscais", estoqueHandler.GetNotasFiscais)
+				estoque.POST("/notas-fiscais", estoqueHandler.CreateNotaFiscal)
+			}
 
-            
-            // User profile route
-            protected.GET("/auth/me", authHandler.Me)
-        }
-    }
+			// Faturamento Reports/Extras
+			faturamento := protected.Group("/faturamento")
+			faturamento.Use(middleware.RequireRole(db, financialRoles...))
+			{
+				faturamento.GET("/relatorios/faturamento", func(c *gin.Context) {
+					c.JSON(http.StatusOK, gin.H{}) // Mock report
+				})
+			}
+
+			adminHandler := handlers.NewAdminHandler(db)
+			admin := protected.Group("/administracao")
+			admin.Use(middleware.RequireRole(db, "ADMIN_TOTAL"))
+			{
+				admin.GET("/estatisticas", adminHandler.GetStats)
+				admin.GET("/configuracoes", adminHandler.ListConfigs)
+				admin.GET("/configuracoes/:chave", adminHandler.GetConfig)
+				admin.PUT("/configuracoes/:chave", adminHandler.SetConfig)
+				admin.GET("/logs", adminHandler.GetLogs)
+			}
+
+			configuracoes := protected.Group("/configuracoes")
+			configuracoes.Use(middleware.RequireRole(db, "ADMIN_TOTAL", "ADMIN_GERENCIAL"))
+			{
+				configuracoes.GET("", configuracaoHandler.GetAgregado)
+				configuracoes.PUT("/geral", configuracaoHandler.UpdateGeral)
+				configuracoes.POST("/salas", configuracaoHandler.CreateSala)
+				configuracoes.PUT("/salas/:id", configuracaoHandler.UpdateSala)
+				configuracoes.DELETE("/salas/:id", configuracaoHandler.DeleteSala)
+				configuracoes.POST("/integracoes", configuracaoHandler.CreateIntegracao)
+				configuracoes.PUT("/integracoes/:id", configuracaoHandler.UpdateIntegracao)
+				configuracoes.DELETE("/integracoes/:id", configuracaoHandler.DeleteIntegracao)
+			}
+
+			// Assinaturas (SaaS)
+			assinaturaHandler := handlers.NewAssinaturaHandler(db)
+			assinaturas := protected.Group("/assinaturas")
+			{
+				assinaturas.GET("/planos", assinaturaHandler.GetPlanos)
+				assinaturas.GET("/status", middleware.RequireRole(db, "ADMIN_TOTAL", "ADMIN_GERENCIAL"), assinaturaHandler.GetStatus)
+				assinaturas.POST("/", middleware.RequireRole(db, "ADMIN_TOTAL"), assinaturaHandler.Assinar)
+			}
+
+			protected.POST("/pacientes/:id/anamnese", middleware.RequireRole(db, "ADMIN_TOTAL", "ADMIN_GERENCIAL", "DENTISTA"), anamneseHandler.CreateOrUpdate)
+			protected.GET("/pacientes/:id/anamnese", middleware.RequireRole(db, "ADMIN_TOTAL", "ADMIN_GERENCIAL", "DENTISTA"), anamneseHandler.FindByPaciente)
+
+			// RNDS Integration
+			rndsHandler := handlers.NewRndsHandler(db)
+			rnds := protected.Group("/rnds")
+			rnds.Use(middleware.RequireRole(db, "ADMIN_TOTAL", "ADMIN_GERENCIAL", "DENTISTA"))
+			{
+				rnds.GET("/status", rndsHandler.CheckStatus)
+				rnds.POST("/patients/:id", rndsHandler.SendPatient)
+				rnds.POST("/attendances/:id", rndsHandler.SendAttendance)
+			}
+
+			// User profile route
+			protected.GET("/auth/me", authHandler.Me)
+		}
+	}
 }

@@ -21,12 +21,29 @@ func LoadConfig() (*Config, error) {
     viper.SetConfigFile(".env")
     viper.AutomaticEnv()
 
+    // AutomaticEnv lets GetString read environment variables, but Viper's
+    // Unmarshal does not discover them by itself. Bind each application key
+    // so values passed by Docker Compose populate Config as well.
+    for _, key := range []string{
+        "DB_HOST",
+        "DB_PORT",
+        "DB_USER",
+        "DB_PASSWORD",
+        "DB_NAME",
+        "SERVER_PORT",
+        "JWT_SECRET",
+        "DB_SSL_MODE",
+        "ENCRYPTION_KEY",
+        "REDIS_ADDR",
+    } {
+        if err := viper.BindEnv(key); err != nil {
+            return nil, err
+        }
+    }
+
     if err := viper.ReadInConfig(); err != nil {
         // It's okay if .env doesn't exist, we might be using system env vars
     }
-
-    viper.BindEnv("REDIS_ADDR")
-
     var config Config
     if err := viper.Unmarshal(&config); err != nil {
         return nil, err
