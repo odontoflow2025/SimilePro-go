@@ -1,41 +1,41 @@
 package handlers
 
 import (
-	"net/http"
 	"SimilePro-go/internal/models"
+	"net/http"
 	"os"
 	"time"
 
+	"SimilePro-go/internal/database"
+	"context"
 	"github.com/gin-gonic/gin"
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/google/uuid"
 	"golang.org/x/crypto/bcrypt"
 	"gorm.io/gorm"
-	"context"
-	"SimilePro-go/internal/database"
 )
 
 type AuthHandler struct {
-    DB        *gorm.DB
-    JWTSecret string
+	DB        *gorm.DB
+	JWTSecret string
 }
 
 func NewAuthHandler(db *gorm.DB, jwtSecret string) *AuthHandler {
-    return &AuthHandler{DB: db, JWTSecret: jwtSecret}
+	return &AuthHandler{DB: db, JWTSecret: jwtSecret}
 }
 
 type RegisterInput struct {
-    Nome        string `json:"nome" binding:"required"`
-    Email       string `json:"email" binding:"required,email"`
-    Senha       string `json:"senha" binding:"required,min=6"`
-    Telefone    string `json:"telefone"`
-    CPF         string `json:"cpf"`
-    TipoUsuario string `json:"tipoUsuario" binding:"required"`
+	Nome        string `json:"nome" binding:"required"`
+	Email       string `json:"email" binding:"required,email"`
+	Senha       string `json:"senha" binding:"required,min=6"`
+	Telefone    string `json:"telefone"`
+	CPF         string `json:"cpf"`
+	TipoUsuario string `json:"tipoUsuario" binding:"required"`
 }
 
 type LoginInput struct {
-    Email string `json:"email" binding:"required,email"`
-    Senha string `json:"senha" binding:"required"`
+	Email string `json:"email" binding:"required,email"`
+	Senha string `json:"senha" binding:"required"`
 }
 
 // Register godoc
@@ -70,11 +70,15 @@ func (h *AuthHandler) Register(c *gin.Context) {
 		return
 	}
 
-	// Keep open registration at the default operational level. Staff roles are
-	// created through the protected user-management endpoint.
+	// Public registration may create operational accounts, but must not grant
+	// administrative privileges. Unknown or empty roles fall back to reception.
 	tipoUsuario := input.TipoUsuario
 	switch tipoUsuario {
-	case "ADMIN", "ADMIN_TOTAL", "ADMIN_GERENCIAL", "ADMINISTRATIVO", "RH", "FINANCEIRO", "FATURISTA", "DENTISTA", "TECNICO", "ASSISTENTE", "":
+	case "ADMIN", "ADMIN_TOTAL", "ADMIN_GERENCIAL", "ADMINISTRATIVO", "RH", "FINANCEIRO", "FATURISTA", "":
+		tipoUsuario = "RECEPCIONISTA"
+	case "RECEPCIONISTA", "TECNICO", "ASSISTENTE", "DENTISTA":
+		// Keep explicitly requested operational roles.
+	default:
 		tipoUsuario = "RECEPCIONISTA"
 	}
 
@@ -106,73 +110,73 @@ func (h *AuthHandler) Register(c *gin.Context) {
 // @Failure      401    {object}  map[string]string
 // @Router       /auth/login [post]
 func (h *AuthHandler) Login(c *gin.Context) {
-    var input LoginInput
-    if err := c.ShouldBindJSON(&input); err != nil {
-        c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-        return
-    }
+	var input LoginInput
+	if err := c.ShouldBindJSON(&input); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
 
-    var user models.User
-    if err := h.DB.Where("email = ?", input.Email).First(&user).Error; err != nil {
-        c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid credentials"})
-        return
-    }
+	var user models.User
+	if err := h.DB.Where("email = ?", input.Email).First(&user).Error; err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid credentials"})
+		return
+	}
 
-    if err := bcrypt.CompareHashAndPassword([]byte(user.SenhaHash), []byte(input.Senha)); err != nil {
-        c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid credentials"})
-        return
-    }
+	if err := bcrypt.CompareHashAndPassword([]byte(user.SenhaHash), []byte(input.Senha)); err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid credentials"})
+		return
+	}
 
-    // Generate a one-hour absolute session.
-    issuedAt := time.Now()
-    sessionTTL := time.Hour
-    token := jwt.NewWithClaims(jwt.SigningMethodRS256, jwt.MapClaims{
-        "jti":         uuid.New().String(),
-        "sub":         user.ID,
-        "name":        user.Nome,
-        "email":       user.Email,
-        "tipoUsuario": user.TipoUsuario,
-        "clinicaId":   user.ClinicaID,
-        "iat":         issuedAt.Unix(),
-        "exp":         issuedAt.Add(sessionTTL).Unix(),
-    })
+	// Generate a one-hour absolute session.
+	issuedAt := time.Now()
+	sessionTTL := time.Hour
+	token := jwt.NewWithClaims(jwt.SigningMethodRS256, jwt.MapClaims{
+		"jti":         uuid.New().String(),
+		"sub":         user.ID,
+		"name":        user.Nome,
+		"email":       user.Email,
+		"tipoUsuario": user.TipoUsuario,
+		"clinicaId":   user.ClinicaID,
+		"iat":         issuedAt.Unix(),
+		"exp":         issuedAt.Add(sessionTTL).Unix(),
+	})
 
-    privateKeyBytes, err := os.ReadFile("private.pem")
-    if err != nil {
-        c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to read private key"})
-        return
-    }
-    privateKey, err := jwt.ParseRSAPrivateKeyFromPEM(privateKeyBytes)
-    if err != nil {
-        c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to parse private key"})
-        return
-    }
+	privateKeyBytes, err := os.ReadFile("private.pem")
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to read private key"})
+		return
+	}
+	privateKey, err := jwt.ParseRSAPrivateKeyFromPEM(privateKeyBytes)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to parse private key"})
+		return
+	}
 
-    tokenString, err := token.SignedString(privateKey)
-    if (err != nil) {
-        c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to generate token"})
-        return
-    }
+	tokenString, err := token.SignedString(privateKey)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to generate token"})
+		return
+	}
 
-    // Set JWT as HttpOnly Cookie
-    maxAge := int(sessionTTL.Seconds())
-    
-    http.SetCookie(c.Writer, &http.Cookie{
-        Name:     "auth_token",
-        Value:    tokenString,
-        MaxAge:   maxAge,
-        Expires:  issuedAt.Add(sessionTTL),
-        Path:     "/",
-        Domain:   "",
-        Secure:   true, // SameSiteNone requires Secure: true
-        HttpOnly: true,
-        SameSite: http.SameSiteNoneMode, // Allows cross-origin cookies
-    })
+	// Set JWT as HttpOnly Cookie
+	maxAge := int(sessionTTL.Seconds())
 
-    c.JSON(http.StatusOK, gin.H{
-        "token": tokenString, // Keep for legacy compatibility if needed
-        "message": "Login successful",
-    })
+	http.SetCookie(c.Writer, &http.Cookie{
+		Name:     "auth_token",
+		Value:    tokenString,
+		MaxAge:   maxAge,
+		Expires:  issuedAt.Add(sessionTTL),
+		Path:     "/",
+		Domain:   "",
+		Secure:   true, // SameSiteNone requires Secure: true
+		HttpOnly: true,
+		SameSite: http.SameSiteNoneMode, // Allows cross-origin cookies
+	})
+
+	c.JSON(http.StatusOK, gin.H{
+		"token":   tokenString, // Keep for legacy compatibility if needed
+		"message": "Login successful",
+	})
 }
 
 // Logout godoc
@@ -191,7 +195,7 @@ func (h *AuthHandler) Logout(c *gin.Context) {
 		if claims, ok := token.Claims.(jwt.MapClaims); ok {
 			jti, okJTI := claims["jti"].(string)
 			expFloat, okExp := claims["exp"].(float64)
-			
+
 			if okJTI && okExp {
 				expTime := time.Unix(int64(expFloat), 0)
 				timeRemaining := time.Until(expTime)
