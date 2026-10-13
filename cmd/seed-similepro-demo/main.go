@@ -32,7 +32,7 @@ func main() {
 	endText := flag.String("end", "", "data final inclusiva (AAAA-MM-DD); padrão: ontem")
 	apply := flag.Bool("apply", false, "gravar no banco; sem esta opção o comando só valida a configuração")
 	confirm := flag.String("confirm", "", "confirmação literal exigida: SIMILE-PRO-DEMO")
-	accessOnly := flag.Bool("access-only", false, "garantir o vínculo ativo do administrador demo e não gerar histórico")
+	accessOnly := flag.Bool("access-only", false, "restaurar o administrador total da conta demo sem gerar histórico")
 	operationalUsersOnly := flag.Bool("operational-users-only", false, "criar/garantir os três usuários operacionais na clínica demo existente")
 	flag.Parse()
 
@@ -98,13 +98,16 @@ func main() {
 			if admin.ClinicaID != clinic.ID {
 				return fmt.Errorf("a conta %s não está vinculada à clínica demo; nenhuma conta foi criada ou alterada", adminEmail)
 			}
+			if err := ensureNetworkAdminRole(tx, &admin); err != nil {
+				return err
+			}
 			if err := ensureAdminMembership(tx, clinic.ID, admin.ID); err != nil {
 				return err
 			}
 			if _, err := ensureDemoDentistProfile(tx, clinic.ID, admin.ID); err != nil {
 				return err
 			}
-			log.Printf("A conta existente %s foi mantida; vínculo administrativo garantido e nenhum novo usuário ou senha foi criado/alterado. Histórico preservado.", adminEmail)
+			log.Printf("A conta existente %s foi restaurada como ADMIN_TOTAL; vínculo da clínica garantido, sem criar usuário ou alterar senha. Histórico preservado.", adminEmail)
 			return nil
 		}
 
@@ -265,7 +268,7 @@ func ensureClinicAndUsers(tx *gorm.DB, password string) (models.Clinica, models.
 	admin := models.User{}
 	err = tx.Where("email = ?", adminEmail).First(&admin).Error
 	if errors.Is(err, gorm.ErrRecordNotFound) {
-		admin = models.User{Nome: "Jefe Gomes", Email: adminEmail, CPF: "99887766001", TipoUsuario: "ADMIN_GERENCIAL", ClinicaID: clinic.ID}
+		admin = models.User{Nome: "Jefe Gomes", Email: adminEmail, CPF: "99887766001", TipoUsuario: "ADMIN_TOTAL", ClinicaID: clinic.ID}
 		if err := admin.SetPassword(password); err != nil {
 			return clinic, admin, models.Dentista{}, fmt.Errorf("gerar hash da senha do administrador: %w", err)
 		}
@@ -280,7 +283,8 @@ func ensureClinicAndUsers(tx *gorm.DB, password string) (models.Clinica, models.
 		if err := admin.SetPassword(password); err != nil {
 			return clinic, admin, models.Dentista{}, fmt.Errorf("gerar hash da senha do administrador: %w", err)
 		}
-		if err := tx.Model(&admin).Update("senha_hash", admin.SenhaHash).Error; err != nil {
+		admin.TipoUsuario = "ADMIN_TOTAL"
+		if err := tx.Model(&admin).Updates(map[string]interface{}{"senha_hash": admin.SenhaHash, "tipo_usuario": admin.TipoUsuario}).Error; err != nil {
 			return clinic, admin, models.Dentista{}, fmt.Errorf("atualizar senha do administrador da clínica seed: %w", err)
 		}
 	}
@@ -299,6 +303,17 @@ func ensureClinicAndUsers(tx *gorm.DB, password string) (models.Clinica, models.
 		return clinic, admin, models.Dentista{}, err
 	}
 	return clinic, admin, dentist, nil
+}
+
+func ensureNetworkAdminRole(tx *gorm.DB, admin *models.User) error {
+	if admin.TipoUsuario == "ADMIN_TOTAL" {
+		return nil
+	}
+	if err := tx.Model(admin).Update("tipo_usuario", "ADMIN_TOTAL").Error; err != nil {
+		return fmt.Errorf("restaurar %s como administrador total da rede: %w", adminEmail, err)
+	}
+	admin.TipoUsuario = "ADMIN_TOTAL"
+	return nil
 }
 
 func ensureDemoDentistProfile(tx *gorm.DB, clinicID, adminID uint) (models.Dentista, error) {
@@ -340,14 +355,14 @@ func ensureDemoDentistProfile(tx *gorm.DB, clinicID, adminID uint) (models.Denti
 }
 
 func ensureAdminMembership(tx *gorm.DB, clinicID, adminID uint) error {
-	// ADMIN_GERENCIAL needs an active clinic residency to pass RequireRole.
+	// Keep the demonstration clinic relationship aligned with the network owner.
 	adminMembership := models.Funcionario{}
 	err := tx.Where("usuario_id = ? AND clinica_id = ?", adminID, clinicID).First(&adminMembership).Error
 	if errors.Is(err, gorm.ErrRecordNotFound) {
 		adminMembership = models.Funcionario{
 			UsuarioID:    adminID,
 			ClinicaID:    clinicID,
-			Cargo:        "ADMIN_GERENCIAL",
+			Cargo:        "ADMIN_TOTAL",
 			DataAdmissao: time.Date(2020, 1, 1, 0, 0, 0, 0, time.Local),
 			Status:       models.StatusFuncionarioAtivo,
 		}
@@ -356,9 +371,12 @@ func ensureAdminMembership(tx *gorm.DB, clinicID, adminID uint) error {
 		}
 	} else if err != nil {
 		return fmt.Errorf("buscar vínculo da conta existente com a clínica: %w", err)
-	} else if adminMembership.Status != models.StatusFuncionarioAtivo {
-		if err := tx.Model(&adminMembership).Update("status", models.StatusFuncionarioAtivo).Error; err != nil {
-			return fmt.Errorf("reativar vínculo da conta existente com a clínica: %w", err)
+	} else if adminMembership.Status != models.StatusFuncionarioAtivo || adminMembership.Cargo != "ADMIN_TOTAL" {
+		if err := tx.Model(&adminMembership).Updates(map[string]interface{}{
+			"status": models.StatusFuncionarioAtivo,
+			"cargo":  "ADMIN_TOTAL",
+		}).Error; err != nil {
+			return fmt.Errorf("atualizar vínculo da conta total com a clínica: %w", err)
 		}
 	}
 	return nil

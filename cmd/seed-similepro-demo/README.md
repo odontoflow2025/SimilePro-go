@@ -1,6 +1,7 @@
 # Seed de demonstração Simile Pro
 
-Cria uma clínica fictícia, a conta administrativa solicitada, uma dentista, 30
+Cria uma clínica fictícia, a conta solicitada como `ADMIN_TOTAL` (administrador
+da rede), uma dentista, 30
 pacientes, agendamentos em dias úteis e receitas para atendimentos concluídos.
 O intervalo padrão vai de `2020-01-01` até ontem, considerando a data local.
 
@@ -26,3 +27,10 @@ O comando é idempotente para os registros identificados pelo seed. Ele usa uma
 transação e aborta se o e-mail já pertencer a outra clínica ou se o identificador
 reservado da clínica estiver ocupado. Datas podem ser informadas com `-start`
 e `-end` no formato `AAAA-MM-DD`. Ele não executa migrações de schema.
+
+Para restaurar apenas o perfil `ADMIN_TOTAL` da conta existente, sem alterar a
+senha nem regenerar o histórico, execute com as configurações do banco carregadas:
+
+```bash
+go run ./cmd/seed-similepro-demo -access-only -apply -confirm SIMILE-PRO-DEMO
+```
